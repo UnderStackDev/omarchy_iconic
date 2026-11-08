@@ -1,0 +1,9 @@
+[Desktop Entry]
+Type=Application
+Name=Iconic
+Comment=Icon themes and app launchers for Omarchy
+Exec=iconic
+Icon=iconic
+Terminal=false
+Categories=Settings;DesktopSettings;
+StartupWMClass=iconic

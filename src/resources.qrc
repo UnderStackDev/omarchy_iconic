@@ -1,0 +1,15 @@
+<RCC>
+    <qresource prefix="/">
+        <file alias="Main.qml">Main.qml</file>
+        <file alias="Placeholder.qml">Placeholder.qml</file>
+        <file alias="ThemesPage.qml">ThemesPage.qml</file>
+        <file alias="ThemeCard.qml">ThemeCard.qml</file>
+        <file alias="Badge.qml">Badge.qml</file>
+        <file alias="OmButton.qml">OmButton.qml</file>
+        <file alias="OmCheck.qml">OmCheck.qml</file>
+        <file alias="SectionLabel.qml">SectionLabel.qml</file>
+        <file alias="KeyHint.qml">KeyHint.qml</file>
+        <file alias="ConfirmDialog.qml">ConfirmDialog.qml</file>
+        <file alias="i18n/en.json">i18n/en.json</file>
+    </qresource>
+</RCC>
