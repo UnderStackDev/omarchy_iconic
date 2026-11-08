@@ -5,7 +5,7 @@ import QtQuick.Layouts
 // Name, version, copyright and where the code lives.
 Popup {
     id: about
-    readonly property string repo: "https://github.com/UnderStackDev/iconic"
+    readonly property string repo: "https://github.com/UnderStackDev/omarchy_iconic"
 
     parent: Overlay.overlay
     anchors.centerIn: parent
@@ -108,7 +108,7 @@ Popup {
             Layout.alignment: Qt.AlignHCenter
             spacing: 8
             OmButton {
-                text: "github.com/UnderStackDev/iconic"
+                text: "github.com/UnderStackDev/omarchy_iconic"
                 primary: true
                 onClicked: Qt.openUrlExternally(about.repo)
             }
