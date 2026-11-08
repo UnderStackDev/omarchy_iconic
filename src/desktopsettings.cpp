@@ -197,8 +197,9 @@ QString ThemeSetHook::script(const QString &binary) {
                "# Installed by Iconic. After an Omarchy theme switch this keeps the icon\n"
                "# theme you locked in Iconic, or (in Follow mode) copies Omarchy's pick to\n"
                "# the GTK, KDE and Qt config files. Iconic rewrites this file when it moves.\n"
-               "ICONIC='%1'\n"
-               "[[ -x $ICONIC ]] || ICONIC=$(command -v iconic) || exit 0\n"
+               "# The installed iconic wins; the path below is the build that wrote this.\n"
+               "ICONIC=$(command -v iconic) || ICONIC='%1'\n"
+               "[[ -x $ICONIC ]] || exit 0\n"
                "exec \"$ICONIC\" hook theme-set\n")
         .arg(quoted);
 }

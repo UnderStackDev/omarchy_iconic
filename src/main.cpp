@@ -59,6 +59,7 @@ int main(int argc, char *argv[]) {
     // Catches up after the theme was changed elsewhere, e.g. by the old plugin.
     backend.updateShellIcons(true);
     Installer::cleanupStale();
+    backend.refreshHook();
     QObject::connect(&backend, &Backend::themeApplied, &app, [](const QString &id) { QIcon::setThemeName(id); });
 
     QQmlApplicationEngine engine;

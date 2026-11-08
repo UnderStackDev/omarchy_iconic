@@ -98,6 +98,8 @@ public:
 
     // What the Omarchy theme-set hook runs. Returns false on failure.
     bool runThemeSetHook();
+    // Keeps an existing hook pointing at this build (no hook is created).
+    void refreshHook();
 
     // Rebuilds the launcher/dock icon layer for the current theme (see
     // shellicons.h). With `onlyIfStale`, skips it when it already matches.

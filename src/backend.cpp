@@ -80,6 +80,11 @@ void Backend::clearError() {
     emit errorChanged();
 }
 
+void Backend::refreshHook() {
+    if (QFile::exists(ThemeSetHook::path()))
+        ensureHook();
+}
+
 bool Backend::ensureHook() {
     QString e;
     if (!ThemeSetHook::ensure(m_hookBinary, &e))
