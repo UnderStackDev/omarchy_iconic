@@ -27,7 +27,7 @@ ApplicationWindow {
     // Single-key shortcuts stay quiet while a text field has focus.
     // Popups count too: keys typed while one opens must not trigger shortcuts.
     readonly property bool typing: (activeFocusItem !== null && activeFocusItem.hasOwnProperty("cursorPosition"))
-        || themesPage.popupOpen || installPage.popupOpen || appsPage.popupOpen || quitDialog.visible
+        || themesPage.popupOpen || installPage.popupOpen || appsPage.popupOpen || quitDialog.visible || aboutDialog.visible
     property bool quitAsked: false
 
     onClosing: (close) => {
@@ -49,6 +49,7 @@ ApplicationWindow {
     onTabChanged: Qt.callLater(() => { if (tab === 0) themesPage.focusList(); else if (tab === 2) appsPage.focusList() })
 
     Shortcut { sequence: "?"; context: Qt.ApplicationShortcut; enabled: !win.typing; onActivated: win.helpVisible = !win.helpVisible }
+    Shortcut { sequence: "A"; context: Qt.ApplicationShortcut; enabled: !win.typing; onActivated: aboutDialog.open() }
     Shortcut { sequence: "Q"; context: Qt.ApplicationShortcut; enabled: !win.typing; onActivated: win.quit() }
     Shortcut { sequence: "1"; context: Qt.ApplicationShortcut; enabled: !win.typing; onActivated: win.tab = 0 }
     Shortcut { sequence: "2"; context: Qt.ApplicationShortcut; enabled: !win.typing; onActivated: win.tab = 1 }
@@ -182,12 +183,15 @@ ApplicationWindow {
                     KeyHint { visible: win.tab === 2; key: "ctrl+s"; action: qsTr("save") }
                     KeyHint { visible: win.tab === 2; key: "ctrl+z"; action: qsTr("undo") }
                     KeyHint { key: "l"; action: qsTr("keep my choice") }
+                    KeyHint { key: "a"; action: qsTr("about") }
                     KeyHint { key: "?"; action: qsTr("all keys") }
                     KeyHint { key: "q"; action: qsTr("quit") }
                 }
                 }
             }
         }
+
+        AboutDialog { id: aboutDialog }
 
         ConfirmDialog {
             id: quitDialog
@@ -261,6 +265,7 @@ ApplicationWindow {
                         KeyHint { key: "ctrl+s" }         Text { text: qsTr("Save the launcher you're editing (Apps tab)"); color: theme.foreground; font.family: theme.font; font.pixelSize: 12 }
                         KeyHint { key: "ctrl+z / ctrl+shift+z" } Text { text: qsTr("Undo / redo launcher changes"); color: theme.foreground; font.family: theme.font; font.pixelSize: 12 }
                         KeyHint { key: "o" }              Text { text: qsTr("Choose theme files to install (Install tab)"); color: theme.foreground; font.family: theme.font; font.pixelSize: 12 }
+                        KeyHint { key: "a" }              Text { text: qsTr("About Iconic"); color: theme.foreground; font.family: theme.font; font.pixelSize: 12 }
                         KeyHint { key: "?" }              Text { text: qsTr("Show or hide this"); color: theme.foreground; font.family: theme.font; font.pixelSize: 12 }
                         KeyHint { key: "q" }              Text { text: qsTr("Quit"); color: theme.foreground; font.family: theme.font; font.pixelSize: 12 }
                     }

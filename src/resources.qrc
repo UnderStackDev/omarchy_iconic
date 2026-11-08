@@ -14,6 +14,7 @@
         <file alias="SectionLabel.qml">SectionLabel.qml</file>
         <file alias="KeyHint.qml">KeyHint.qml</file>
         <file alias="ConfirmDialog.qml">ConfirmDialog.qml</file>
+        <file alias="AboutDialog.qml">AboutDialog.qml</file>
         <file alias="i18n/en.json">i18n/en.json</file>
     </qresource>
 </RCC>
