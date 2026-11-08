@@ -6,6 +6,7 @@
 #include <QtTest>
 
 #include "backend.h"
+#include "desktopentries.h"
 #include "desktopsettings.h"
 #include "iconthemes.h"
 #include "shellicons.h"
@@ -90,6 +91,10 @@ private slots:
         QCOMPARE(themes.resolve("Child", "folder", 28), sys + "/Plain/scalable/places/folder.svg");
         QCOMPARE(themes.resolve("Child", "only-hicolor", 28), sys + "/hicolor/48/apps/only-hicolor.png");
         QVERIFY(themes.resolve("Child", "missing", 28).isEmpty());
+        // A user hicolor folder without index.theme still counts.
+        touch(m_home.path() + "/.local/share/icons/hicolor/48/apps/user-app.png");
+        IconThemes fresh(Backend::iconSearchPaths(), m_home.path());
+        QCOMPARE(fresh.resolve("hicolor", "user-app", 48), m_home.path() + "/.local/share/icons/hicolor/48/apps/user-app.png");
     }
 
     void iniSetValueKeepsEverythingElse()
@@ -350,6 +355,112 @@ private slots:
 
         backend.installPaths({"https://example.com/theme.zip"});
         QVERIFY(backend.error().contains("Download"));
+    }
+
+    void desktopEntriesOverrideCopiesAndResets()
+    {
+        const QString h = m_home.path();
+        const QString sys = h + "/system/applications", user = h + "/.local/share/applications";
+        write(sys + "/org.gnome.Calc.desktop",
+              "[Desktop Entry]\nType=Application\nName=Calculator\nName[fi]=Laskin\nIcon=calc\nExec=calc\n"
+              "[Desktop Action new]\nName=New\n");
+        write(sys + "/sub/tool.desktop", "[Desktop Entry]\nType=Application\nName=Tool\nIcon=tool\nNoDisplay=true\n");
+        write(sys + "/kde-only.desktop", "[Desktop Entry]\nType=Application\nName=K\nOnlyShowIn=KDE;\n");
+        write(sys + "/link.desktop", "[Desktop Entry]\nType=Link\nName=Web\n");
+        write(user + "/Maps.desktop", "[Desktop Entry]\nType=Application\nName=Maps\nExec=omarchy-launch-webapp https://maps\nIcon=maps\n");
+
+        const QStringList dirs{user, sys};
+        auto find = [&](const QString &id) {
+            for (const auto &e : DesktopEntries::scan(dirs, {"Hyprland"}))
+                if (e.id == id) return e;
+            return DesktopEntries::Entry{};
+        };
+        QVERIFY(find("link").id.isEmpty());
+        QVERIFY(find("kde-only").hiddenByDesktop);
+        QCOMPARE(find("sub-tool").path, sys + "/sub/tool.desktop");
+        QVERIFY(find("sub-tool").noDisplay);
+        QVERIFY(find("Maps").source == DesktopEntries::Source::WebApp);
+
+        // A system launcher gets a marked copy; the original is untouched.
+        DesktopEntries::Change change;
+        change.name = "Calc";
+        change.icon = "accessories-calculator";
+        QString error;
+        QCOMPARE(DesktopEntries::apply(find("org.gnome.Calc"), change, &error), user + "/org.gnome.Calc.desktop");
+        auto calc = find("org.gnome.Calc");
+        QVERIFY(calc.override);
+        QCOMPARE(calc.name, QString("Calc"));
+        QCOMPARE(calc.icon, QString("accessories-calculator"));
+        QCOMPARE(calc.originalName, QString("Calculator"));
+        QCOMPARE(calc.originalPath, sys + "/org.gnome.Calc.desktop");
+        QVERIFY(!read(user + "/org.gnome.Calc.desktop").contains("Name[fi]"));
+        QVERIFY(read(user + "/org.gnome.Calc.desktop").contains("[Desktop Action new]\nName=New"));
+        QVERIFY(read(sys + "/org.gnome.Calc.desktop").contains("Name=Calculator"));
+
+        // Showing a NoDisplay launcher, from a subfolder id.
+        DesktopEntries::Change show;
+        show.noDisplay = 0;
+        QVERIFY(!DesktopEntries::apply(find("sub-tool"), show).isEmpty());
+        QVERIFY(!find("sub-tool").noDisplay);
+
+        QVERIFY(DesktopEntries::reset(calc));
+        QVERIFY(!QFile::exists(user + "/org.gnome.Calc.desktop"));
+        QCOMPARE(find("org.gnome.Calc").name, QString("Calculator"));
+
+        // The user's own web app is edited in place, with a backup to reset to.
+        DesktopEntries::Change rename;
+        rename.name = "Google Maps";
+        QCOMPARE(DesktopEntries::apply(find("Maps"), rename), user + "/Maps.desktop");
+        auto maps = find("Maps");
+        QVERIFY(maps.backedUp && !maps.override);
+        QCOMPARE(maps.originalName, QString("Maps"));
+        QVERIFY(DesktopEntries::reset(maps));
+        QCOMPARE(find("Maps").name, QString("Maps"));
+        QVERIFY(!find("Maps").backedUp);
+    }
+
+    void importIconAcceptsOnlyImages()
+    {
+        const QString h = m_home.path() + "/img";
+        QDir().mkpath(h);
+        QImage blue(8, 8, QImage::Format_ARGB32);
+        blue.fill(Qt::blue);
+        QVERIFY(blue.save(h + "/my icon.png"));
+        write(h + "/fake.png", "not an image");
+        write(h + "/run.sh", "#!/bin/sh");
+        QString error;
+        const QString imported = DesktopEntries::importIcon(h + "/my icon.png", "org.x App", &error);
+        QVERIFY2(!imported.isEmpty(), qPrintable(error));
+        QVERIFY(imported.startsWith(DesktopEntries::customIconDir() + "/org.x_App-"));
+        QVERIFY(QFile::exists(imported));
+        QVERIFY(DesktopEntries::importIcon(h + "/fake.png", "x").isEmpty());
+        QVERIFY(DesktopEntries::importIcon(h + "/run.sh", "x").isEmpty());
+    }
+
+    void backendSavesUndoesAndRedoesAppChanges()
+    {
+        const QString h = m_home.path();
+        write(h + "/system/applications/editor.desktop", "[Desktop Entry]\nType=Application\nName=Editor\nIcon=editor\n");
+        Backend backend(nullptr, m_gsettings, "/usr/bin/iconic");
+        const QString copy = h + "/.local/share/applications/editor.desktop";
+
+        QVERIFY(backend.saveApp("editor", "Editor", "editor", false));  // nothing changed
+        QVERIFY(!QFile::exists(copy) && !backend.canUndo());
+        QVERIFY(!backend.saveApp("editor", "  ", "editor", false));
+
+        QVERIFY(backend.saveApp("editor", "Writer", "", true));
+        QVERIFY(QFile::exists(copy));
+        QVERIFY(backend.canUndo());
+        backend.undo();
+        QVERIFY(!QFile::exists(copy));
+        QVERIFY(backend.canRedo());
+        backend.redo();
+        QCOMPARE(DesktopEntries::value(copy, "Name"), QString("Writer"));
+        QCOMPARE(DesktopEntries::value(copy, "NoDisplay"), QString("true"));
+        QVERIFY(backend.resetApp("editor"));
+        QVERIFY(!QFile::exists(copy));
+        backend.undo();
+        QVERIFY(QFile::exists(copy));
     }
 
     void themeFallsBack()

@@ -6,6 +6,8 @@
 #include <QFileInfo>
 #include <QStandardPaths>
 #include <QFutureWatcher>
+#include <QSaveFile>
+#include <QSet>
 #include <QUrl>
 #include <QVariantMap>
 #include <QtConcurrent/QtConcurrentRun>
@@ -45,7 +47,9 @@ QVariantList Backend::themes() const {
 }
 
 void Backend::refresh() {
-    m_iconThemes->clearCache();
+    // A rebuild running on another thread reads the cache; leave it be.
+    if (!m_shellIconsRunning)
+        m_iconThemes->clearCache();
     m_themes = m_iconThemes->scan();
     m_config = IconicConfig::load();
     QString e;
@@ -53,6 +57,7 @@ void Backend::refresh() {
     if (!e.isEmpty())
         fail(e);
     emit changed();
+    refreshApps();
 }
 
 bool Backend::installed(const QString &id) const {
@@ -203,10 +208,38 @@ bool Backend::updateShellIcons(bool onlyIfStale) {
         return false;
     if (onlyIfStale && ShellIcons::builtFor(m_shellLayer) == m_currentTheme)
         return true;
-    QString e;
     const QStringList names = ShellIcons::desktopIconNames(ShellIcons::defaultApplicationDirs());
-    if (!ShellIcons::rebuild(*m_iconThemes, m_currentTheme, names, m_shellLayer, &e))
-        return fail(e);
+    if (!m_asyncShellIcons) {
+        QString e;
+        if (!ShellIcons::rebuild(*m_iconThemes, m_currentTheme, names, m_shellLayer, &e))
+            return fail(e);
+        return true;
+    }
+    // One rebuild at a time; a change during one queues exactly one more.
+    if (m_shellIconsRunning) {
+        m_shellIconsAgain = true;
+        return true;
+    }
+    m_shellIconsRunning = true;
+    auto *watcher = new QFutureWatcher<QString>(this);
+    connect(watcher, &QFutureWatcherBase::finished, this, [this, watcher] {
+        const QString e = watcher->result();
+        watcher->deleteLater();
+        m_shellIconsRunning = false;
+        if (!e.isEmpty())
+            fail(e);
+        if (m_shellIconsAgain) {
+            m_shellIconsAgain = false;
+            updateShellIcons();
+        }
+    });
+    IconThemes *themes = m_iconThemes.get();
+    const QString theme = m_currentTheme, layer = m_shellLayer;
+    watcher->setFuture(QtConcurrent::run([themes, theme, names, layer] {
+        QString e;
+        ShellIcons::rebuild(*themes, theme, names, layer, &e);
+        return e;
+    }));
     return true;
 }
 
@@ -358,4 +391,185 @@ QStringList Backend::installNow(const QString &path, Installer::Conflict conflic
     if (!ok)
         fail(e);
     return installed;
+}
+
+static QString sourceName(DesktopEntries::Source source) {
+    switch (source) {
+    case DesktopEntries::Source::User: return "user";
+    case DesktopEntries::Source::Flatpak: return "flatpak";
+    case DesktopEntries::Source::WebApp: return "webapp";
+    default: return "system";
+    }
+}
+
+static QSet<QString> omarchyHides() {
+    const QString root = qEnvironmentVariable("OMARCHY_PATH", "/usr/share/omarchy");
+    QFile file(root + "/default/omarchy/launcher.hides");
+    QSet<QString> ids;
+    if (file.open(QIODevice::ReadOnly | QIODevice::Text))
+        for (const QString &line : QString::fromUtf8(file.readAll()).split('\n')) {
+            QString id = line.trimmed();
+            if (id.endsWith(".desktop"))
+                id.chop(8);
+            if (!id.isEmpty() && !id.startsWith('#'))
+                ids.insert(id);
+        }
+    return ids;
+}
+
+void Backend::refreshApps() {
+    m_apps = DesktopEntries::scan(DesktopEntries::applicationDirs(),
+                                  qEnvironmentVariable("XDG_CURRENT_DESKTOP").split(':', Qt::SkipEmptyParts),
+                                  omarchyHides());
+    emit appsChanged();
+}
+
+QVariantList Backend::apps() const {
+    QVariantList out;
+    for (const DesktopEntries::Entry &e : m_apps) {
+        QVariantMap row;
+        row["id"] = e.id;
+        row["name"] = e.name;
+        row["comment"] = e.comment;
+        row["icon"] = e.icon;
+        row["path"] = e.path;
+        row["hidden"] = e.noDisplay;
+        row["hiddenByDesktop"] = e.hiddenByDesktop;
+        row["modified"] = e.modified();
+        row["source"] = sourceName(e.source);
+        row["originalName"] = e.originalName;
+        row["originalIcon"] = e.originalIcon;
+        row["originalHidden"] = e.originalNoDisplay;
+        out << row;
+    }
+    return out;
+}
+
+const DesktopEntries::Entry *Backend::findApp(const QString &id) const {
+    for (const DesktopEntries::Entry &e : m_apps)
+        if (e.id == id)
+            return &e;
+    return nullptr;
+}
+
+Backend::Snapshot Backend::snapshot(const QString &id) const {
+    Snapshot snap;
+    QStringList paths{DesktopEntries::userDir() + "/" + id + ".desktop",
+                      DesktopEntries::backupDir() + "/" + id + ".desktop"};
+    if (const auto *e = findApp(id))
+        paths << e->path;
+    paths.removeDuplicates();
+    for (const QString &path : paths) {
+        // Only Iconic's own folders and the user's launchers are ever restored.
+        if (!path.startsWith(DesktopEntries::userDir() + "/") && !path.startsWith(DesktopEntries::backupDir() + "/"))
+            continue;
+        QFile f(path);
+        if (f.open(QIODevice::ReadOnly))
+            snap.files << qMakePair(path, f.readAll());
+        else
+            snap.absent << path;
+    }
+    return snap;
+}
+
+void Backend::restore(const Snapshot &snap) {
+    for (const auto &file : snap.files) {
+        QDir().mkpath(QFileInfo(file.first).absolutePath());
+        QSaveFile out(file.first);
+        if (out.open(QIODevice::WriteOnly)) {
+            out.write(file.second);
+            out.commit();
+        }
+    }
+    for (const QString &path : snap.absent)
+        QFile::remove(path);
+}
+
+void Backend::afterAppChange() {
+    DesktopEntries::refreshDatabase();
+    refreshApps();
+    updateShellIcons();
+}
+
+bool Backend::saveApp(const QString &id, const QString &name, const QString &icon, bool hidden) {
+    const auto *entry = findApp(id);
+    if (!entry)
+        return fail(tr("No launcher called %1").arg(id));
+    if (name.trimmed().isEmpty())
+        return fail(tr("The name can't be empty"));
+    DesktopEntries::Change change;
+    if (name.trimmed() != entry->name)
+        change.name = name.trimmed();
+    if (!icon.trimmed().isEmpty() && icon.trimmed() != entry->icon)
+        change.icon = icon.trimmed();
+    if (hidden != entry->noDisplay)
+        change.noDisplay = hidden ? 1 : 0;
+    if (change.name.isEmpty() && change.icon.isEmpty() && change.noDisplay < 0)
+        return true;
+
+    const Snapshot before = snapshot(id);
+    QString e;
+    if (DesktopEntries::apply(*entry, change, &e).isEmpty()) {
+        restore(before);
+        return fail(e);
+    }
+    m_undo << qMakePair(id, before);
+    m_redo.clear();
+    afterAppChange();
+    return true;
+}
+
+bool Backend::resetApp(const QString &id) {
+    const auto *entry = findApp(id);
+    if (!entry || !entry->modified())
+        return true;
+    const Snapshot before = snapshot(id);
+    QString e;
+    if (!DesktopEntries::reset(*entry, &e))
+        return fail(e);
+    m_undo << qMakePair(id, before);
+    m_redo.clear();
+    afterAppChange();
+    return true;
+}
+
+void Backend::undo() {
+    if (m_undo.isEmpty())
+        return;
+    const auto step = m_undo.takeLast();
+    m_redo << qMakePair(step.first, snapshot(step.first));
+    restore(step.second);
+    afterAppChange();
+}
+
+void Backend::redo() {
+    if (m_redo.isEmpty())
+        return;
+    const auto step = m_redo.takeLast();
+    m_undo << qMakePair(step.first, snapshot(step.first));
+    restore(step.second);
+    afterAppChange();
+}
+
+QString Backend::importIcon(const QString &pathOrUrl, const QString &id) {
+    const QUrl url(pathOrUrl);
+    const QString path = url.isLocalFile() ? url.toLocalFile() : pathOrUrl;
+    QString e;
+    const QString imported = DesktopEntries::importIcon(path, id, &e);
+    if (imported.isEmpty())
+        fail(e);
+    return imported;
+}
+
+QStringList Backend::themeIconNames(const QString &query, int limit) {
+    const QStringList all = m_iconThemes->appIconNames(m_currentTheme);
+    const QString q = query.trimmed().toLower();
+    QStringList out;
+    for (const QString &name : all) {
+        if (q.isEmpty() || name.toLower().contains(q))
+            out << name;
+        if (out.size() >= limit)
+            break;
+    }
+    return out;
 }

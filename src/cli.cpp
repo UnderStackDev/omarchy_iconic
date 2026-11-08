@@ -3,6 +3,7 @@
 #include <QJsonArray>
 #include <QJsonDocument>
 #include <QJsonObject>
+#include <QFileInfo>
 #include <QRegularExpression>
 #include <QTextStream>
 
@@ -20,6 +21,10 @@ static const char *usage =
     "                            Install icon themes into ~/.local/share/icons\n"
     "  lock | follow             Keep the current theme across Omarchy theme\n"
     "                            switches, or let each Omarchy theme pick\n"
+    "  app list                  List launchers (--modified, --hidden to filter)\n"
+    "  app set <id> [--name <name>] [--icon <name|file>] [--hide|--show]\n"
+    "                            Change a launcher (a copy; the original stays)\n"
+    "  app reset <id>            Undo Iconic's changes to a launcher\n"
     "  shell-icons               Rebuild the launcher/dock icon layer\n"
     "  hook theme-set            Run by Omarchy after a theme switch\n"
     "\n"
@@ -142,6 +147,60 @@ int Cli::run(const QStringList &rawArgs) {
                 print(note);
         }
         return installed.isEmpty() ? 1 : 0;
+    }
+
+    if (command == "app") {
+        const QString sub = args.value(1);
+        auto option = [&](const QString &flag) {
+            const int i = args.indexOf(flag);
+            return i >= 0 ? args.value(i + 1) : QString();
+        };
+        if (sub == "list") {
+            QJsonArray rows;
+            for (const DesktopEntries::Entry &e : backend.appList()) {
+                if (args.contains("--modified") && !e.modified())
+                    continue;
+                if (args.contains("--hidden") && !e.noDisplay)
+                    continue;
+                rows << QJsonObject{{"id", e.id}, {"name", e.name}, {"icon", e.icon}, {"hidden", e.noDisplay},
+                                    {"modified", e.modified()}, {"path", e.path}};
+                if (!json)
+                    print(QString("%1%2  %3  (%4)").arg(e.modified() ? "* " : "  ", e.id, e.name, e.icon));
+            }
+            if (json)
+                print(QJsonDocument(QJsonObject{{"ok", true}, {"apps", rows}}).toJson(QJsonDocument::Compact));
+            return 0;
+        }
+        const QString id = args.value(2);
+        const DesktopEntries::Entry *entry = nullptr;
+        for (const DesktopEntries::Entry &e : backend.appList())
+            if (e.id == id || e.id == QString(id).remove(".desktop"))
+                entry = &e;
+        if (!entry)
+            return failure(QString("no launcher with id \"%1\" (see iconic app list)").arg(id), json);
+        const QString realId = entry->id;
+        if (sub == "set") {
+            QString icon = option("--icon");
+            if (!icon.isEmpty() && (icon.contains('/') || icon.contains('.')) && QFileInfo::exists(icon)) {
+                icon = backend.importIcon(QFileInfo(icon).absoluteFilePath(), realId);
+                if (icon.isEmpty())
+                    return failure(backend.error(), json);
+            }
+            const QString name = option("--name").isEmpty() ? entry->name : option("--name");
+            const bool hidden = args.contains("--hide") ? true : args.contains("--show") ? false : entry->noDisplay;
+            if (!backend.saveApp(realId, name, icon, hidden))
+                return failure(backend.error(), json);
+        } else if (sub == "reset") {
+            if (!backend.resetApp(realId))
+                return failure(backend.error(), json);
+        } else {
+            return failure("app needs list, set or reset", json);
+        }
+        if (json)
+            print(QJsonDocument(QJsonObject{{"ok", true}, {"id", realId}}).toJson(QJsonDocument::Compact));
+        else
+            print(QString("%1 %2").arg(sub == "set" ? "Changed" : "Reset", realId));
+        return 0;
     }
 
     if (command == "shell-icons") {

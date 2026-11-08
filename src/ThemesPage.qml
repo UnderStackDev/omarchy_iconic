@@ -8,6 +8,7 @@ Item {
 
     property string selectedId: backend.currentTheme
     property alias searchField: search
+    readonly property bool popupOpen: removeDialog.visible
 
     readonly property var filtered: {
         const q = search.text.trim().toLowerCase()
@@ -28,6 +29,7 @@ Item {
         if (selectedTheme && selectedTheme.id !== backend.currentTheme)
             backend.applyTheme(selectedTheme.id)
     }
+    function focusList() { grid.forceActiveFocus() }
     function askRemove() { if (selectedRemovable) removeDialog.open() }
 
     function moveSelection(step) {

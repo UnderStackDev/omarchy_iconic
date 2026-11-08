@@ -24,18 +24,40 @@ ApplicationWindow {
     property bool helpVisible: false
     property int tab: 0
     readonly property var tabNames: [qsTr("Themes"), qsTr("Install"), qsTr("Apps")]
-    readonly property bool typing: themesPage.searchField.activeFocus
+    // Single-key shortcuts stay quiet while a text field has focus.
+    // Popups count too: keys typed while one opens must not trigger shortcuts.
+    readonly property bool typing: (activeFocusItem !== null && activeFocusItem.hasOwnProperty("cursorPosition"))
+        || themesPage.popupOpen || installPage.popupOpen || appsPage.popupOpen || quitDialog.visible
+    property bool quitAsked: false
+
+    onClosing: (close) => {
+        if (appsPage.dirty && !win.quitAsked) {
+            close.accepted = false
+            quitDialog.open()
+        }
+    }
+
+    function quit() {
+        if (appsPage.dirty) quitDialog.open()
+        else Qt.quit()
+    }
 
     // Another tool (or an Omarchy theme switch) may change the icon theme
     // while Iconic is open; re-read when the window comes back to front.
     onActiveChanged: if (active) backend.refresh()
+    // Arrow keys work right away on the tab you switch to.
+    onTabChanged: Qt.callLater(() => { if (tab === 0) themesPage.focusList(); else if (tab === 2) appsPage.focusList() })
 
     Shortcut { sequence: "?"; context: Qt.ApplicationShortcut; enabled: !win.typing; onActivated: win.helpVisible = !win.helpVisible }
-    Shortcut { sequence: "Q"; context: Qt.ApplicationShortcut; enabled: !win.typing; onActivated: Qt.quit() }
+    Shortcut { sequence: "Q"; context: Qt.ApplicationShortcut; enabled: !win.typing; onActivated: win.quit() }
     Shortcut { sequence: "1"; context: Qt.ApplicationShortcut; enabled: !win.typing; onActivated: win.tab = 0 }
     Shortcut { sequence: "2"; context: Qt.ApplicationShortcut; enabled: !win.typing; onActivated: win.tab = 1 }
     Shortcut { sequence: "3"; context: Qt.ApplicationShortcut; enabled: !win.typing; onActivated: win.tab = 2 }
-    Shortcut { sequence: "/"; context: Qt.ApplicationShortcut; enabled: !win.typing && win.tab === 0; onActivated: themesPage.searchField.forceActiveFocus() }
+    Shortcut { sequence: "/"; context: Qt.ApplicationShortcut; enabled: !win.typing && win.tab !== 1; onActivated: (win.tab === 0 ? themesPage : appsPage).searchField.forceActiveFocus() }
+    Shortcut { sequence: "I"; context: Qt.ApplicationShortcut; enabled: !win.typing && win.tab === 2; onActivated: appsPage.pickIcon() }
+    Shortcut { sequences: [StandardKey.Save]; context: Qt.ApplicationShortcut; enabled: win.tab === 2; onActivated: appsPage.save() }
+    Shortcut { sequences: [StandardKey.Undo]; context: Qt.ApplicationShortcut; enabled: !win.typing && backend.canUndo; onActivated: backend.undo() }
+    Shortcut { sequences: [StandardKey.Redo]; context: Qt.ApplicationShortcut; enabled: !win.typing && backend.canRedo; onActivated: backend.redo() }
     Shortcut { sequence: "Space"; context: Qt.ApplicationShortcut; enabled: !win.typing && win.tab === 0; onActivated: themesPage.applySelected() }
     Shortcut { sequence: "L"; context: Qt.ApplicationShortcut; enabled: !win.typing; onActivated: backend.setLock(!backend.lock) }
     Shortcut { sequence: "Del"; context: Qt.ApplicationShortcut; enabled: !win.typing && win.tab === 0; onActivated: themesPage.askRemove() }
@@ -143,7 +165,7 @@ ApplicationWindow {
 
                 ThemesPage { id: themesPage }
                 InstallPage { id: installPage }
-                Placeholder { text: qsTr("App names and icons — coming in phase 3") }
+                AppsPage { id: appsPage }
             }
 
             // Footer: every shortcut in sight, like Omarchy's own tools.
@@ -164,11 +186,25 @@ ApplicationWindow {
                     KeyHint { visible: win.tab === 0; key: "/"; action: qsTr("search") }
                     KeyHint { visible: win.tab === 0; key: "del"; action: qsTr("remove") }
                     KeyHint { visible: win.tab === 1; key: "o"; action: qsTr("choose files") }
+                    KeyHint { visible: win.tab === 2; key: "↑↓"; action: qsTr("pick") }
+                    KeyHint { visible: win.tab === 2; key: "/"; action: qsTr("search") }
+                    KeyHint { visible: win.tab === 2; key: "enter"; action: qsTr("edit name") }
+                    KeyHint { visible: win.tab === 2; key: "i"; action: qsTr("icon from theme") }
+                    KeyHint { visible: win.tab === 2; key: "ctrl+s"; action: qsTr("save") }
+                    KeyHint { visible: win.tab === 2; key: "ctrl+z"; action: qsTr("undo") }
                     KeyHint { key: "l"; action: qsTr("keep my choice") }
                     KeyHint { key: "?"; action: qsTr("all keys") }
                     KeyHint { key: "q"; action: qsTr("quit") }
                 }
             }
+        }
+
+        ConfirmDialog {
+            id: quitDialog
+            title: qsTr("Quit without saving?")
+            message: qsTr("Your changes to %1 aren't saved.").arg(appsPage.app ? appsPage.app.name : "")
+            confirmText: qsTr("Quit")
+            onConfirmed: { win.quitAsked = true; Qt.quit() }
         }
 
         // Errors stay on screen until dismissed; nothing fails silently.
@@ -231,6 +267,9 @@ ApplicationWindow {
                         KeyHint { key: "/" }              Text { text: qsTr("Search themes"); color: theme.foreground; font.family: theme.font; font.pixelSize: 12 }
                         KeyHint { key: "l" }              Text { text: qsTr("Keep my choice on or off"); color: theme.foreground; font.family: theme.font; font.pixelSize: 12 }
                         KeyHint { key: "del" }            Text { text: qsTr("Remove the picked user theme"); color: theme.foreground; font.family: theme.font; font.pixelSize: 12 }
+                        KeyHint { key: "i" }              Text { text: qsTr("Pick an icon from the theme (Apps tab)"); color: theme.foreground; font.family: theme.font; font.pixelSize: 12 }
+                        KeyHint { key: "ctrl+s" }         Text { text: qsTr("Save the launcher you're editing (Apps tab)"); color: theme.foreground; font.family: theme.font; font.pixelSize: 12 }
+                        KeyHint { key: "ctrl+z / ctrl+shift+z" } Text { text: qsTr("Undo / redo launcher changes"); color: theme.foreground; font.family: theme.font; font.pixelSize: 12 }
                         KeyHint { key: "o" }              Text { text: qsTr("Choose theme files to install (Install tab)"); color: theme.foreground; font.family: theme.font; font.pixelSize: 12 }
                         KeyHint { key: "?" }              Text { text: qsTr("Show or hide this"); color: theme.foreground; font.family: theme.font; font.pixelSize: 12 }
                         KeyHint { key: "q" }              Text { text: qsTr("Quit"); color: theme.foreground; font.family: theme.font; font.pixelSize: 12 }

@@ -98,6 +98,24 @@ static QString pixmap(const QString &name) {
     return {};
 }
 
+QString ShellIcons::resolveForLauncher(IconThemes &themes, const QString &theme, const QString &name, int size,
+                                      bool *themed) {
+    // The theme's own icon first, under any of the app's usual names; then
+    // the app's own icon, so no other theme leaks in.
+    for (const QString &candidate : candidates(name)) {
+        const QString file = themes.resolveThemed(theme, candidate, size);
+        if (!file.isEmpty()) {
+            if (themed)
+                *themed = true;
+            return file;
+        }
+    }
+    if (themed)
+        *themed = false;
+    const QString own = themes.resolve("hicolor", name, size);
+    return own.isEmpty() ? pixmap(name) : own;
+}
+
 bool ShellIcons::rebuild(IconThemes &themes, const QString &theme, const QStringList &iconNames,
                          const QString &layer, QString *error, Stats *stats) {
     Stats local;
@@ -112,20 +130,10 @@ bool ShellIcons::rebuild(IconThemes &themes, const QString &theme, const QString
     }
 
     for (const QString &name : iconNames) {
-        // The theme's own icon first, under any of the app's usual names;
-        // then the app's own icon, so no other theme leaks in.
-        QString file;
-        for (const QString &candidate : candidates(name)) {
-            file = themes.resolveThemed(theme, candidate, 256);
-            if (!file.isEmpty())
-                break;
-        }
-        if (!file.isEmpty())
+        bool fromTheme = false;
+        const QString file = resolveForLauncher(themes, theme, name, 256, &fromTheme);
+        if (fromTheme)
             ++s.themed;
-        else
-            file = themes.resolve("hicolor", name, 256);
-        if (file.isEmpty())
-            file = pixmap(name);
         if (file.isEmpty())
             continue;
 

@@ -66,6 +66,7 @@ IconThemes::Parsed IconThemes::parseIndex(const QString &file) {
         d.minSize = keys.value("MinSize", QString::number(d.size)).toInt();
         d.maxSize = keys.value("MaxSize", QString::number(d.size)).toInt();
         d.threshold = keys.value("Threshold", "2").toInt();
+        d.context = keys.value("Context");
         if (d.size > 0)
             parsed.directories << d;
     }
@@ -123,8 +124,13 @@ const IconThemes::Parsed &IconThemes::theme(const QString &id) {
             continue;
         if (!parsed.valid) {
             const Parsed index = parseIndex(root + "/index.theme");
-            if (index.valid)
+            if (index.valid) {
+                // Keep the roots found so far (a user folder without its own
+                // index.theme, like ~/.local/share/icons/hicolor).
+                const QStringList roots = parsed.roots;
                 parsed = index;
+                parsed.roots = roots;
+            }
         }
         parsed.roots << root;
     }
@@ -230,6 +236,36 @@ QImage IconThemes::render(const QString &file, const QSize &size) {
     if (!image.isNull() && image.size() != size)
         image = image.scaled(size, Qt::KeepAspectRatio, Qt::SmoothTransformation);
     return image;
+}
+
+QStringList IconThemes::appIconNames(const QString &themeId) {
+    QMutexLocker lock(&m_mutex);
+    QSet<QString> names;
+    QStringList queue{themeId, "hicolor"}, seen;
+    while (!queue.isEmpty()) {
+        const QString id = queue.takeFirst();
+        if (seen.contains(id))
+            continue;
+        seen << id;
+        const Parsed &t = theme(id);
+        for (const Directory &d : t.directories) {
+            const bool apps = d.context == "Applications" || (d.context.isEmpty() && d.path.contains("apps"));
+            if (!apps)
+                continue;
+            for (const QString &root : t.roots) {
+                const QDir dir(root + "/" + d.path);
+                for (const QString &file : dir.entryList({"*.svg", "*.png", "*.xpm"}, QDir::Files | QDir::System)) {
+                    const QString name = QFileInfo(file).completeBaseName();
+                    if (!name.endsWith("-symbolic"))
+                        names.insert(name);
+                }
+            }
+        }
+        queue << t.inherits;
+    }
+    QStringList out(names.begin(), names.end());
+    out.sort(Qt::CaseInsensitive);
+    return out;
 }
 
 void IconThemes::clearCache() {

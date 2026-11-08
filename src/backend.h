@@ -8,6 +8,7 @@
 #include "desktopsettings.h"
 #include "iconthemes.h"
 #include "installer.h"
+#include "desktopentries.h"
 
 // Iconic's state and actions, shared by the window (as `backend` in QML) and
 // the command line. Nothing here needs a display.
@@ -24,6 +25,10 @@ class Backend : public QObject {
     Q_PROPERTY(QStringList conflicts READ conflicts NOTIFY installChanged)
     Q_PROPERTY(QStringList lastInstalled READ lastInstalled NOTIFY installChanged)
     Q_PROPERTY(QStringList lastNotes READ lastNotes NOTIFY installChanged)
+    // Apps tab.
+    Q_PROPERTY(QVariantList apps READ apps NOTIFY appsChanged)
+    Q_PROPERTY(bool canUndo READ canUndo NOTIFY appsChanged)
+    Q_PROPERTY(bool canRedo READ canRedo NOTIFY appsChanged)
 
 public:
     // `gsettings` and `hookBinary` are swapped out by tests; the defaults are
@@ -42,6 +47,10 @@ public:
     QStringList conflicts() const;
     QStringList lastInstalled() const { return m_lastInstalled; }
     QStringList lastNotes() const { return m_lastNotes; }
+    QVariantList apps() const;
+    QList<DesktopEntries::Entry> appList() const { return m_apps; }
+    bool canUndo() const { return !m_undo.isEmpty(); }
+    bool canRedo() const { return !m_redo.isEmpty(); }
 
     IconThemes *iconThemes() { return m_iconThemes.get(); }
 
@@ -67,6 +76,23 @@ public:
     Q_INVOKABLE void resolveConflicts(const QString &choice);
     Q_INVOKABLE void clearInstallResult();
 
+    // Re-reads every launcher.
+    Q_INVOKABLE void refreshApps();
+    // Saves a launcher's name, icon (a theme name or absolute path) and
+    // whether it's hidden. Unchanged values are left alone.
+    Q_INVOKABLE bool saveApp(const QString &id, const QString &name, const QString &icon, bool hidden);
+    // Puts a launcher back the way its package or the user made it.
+    Q_INVOKABLE bool resetApp(const QString &id);
+    // Copies a picked image into Iconic's icon folder; returns its path.
+    Q_INVOKABLE QString importIcon(const QString &pathOrUrl, const QString &id);
+    // Icon names in the current theme for the picker, filtered, at most `limit`.
+    Q_INVOKABLE QStringList themeIconNames(const QString &query, int limit = 400);
+    Q_INVOKABLE void undo();
+    Q_INVOKABLE void redo();
+
+    // Window mode rebuilds the launcher icon layer off the GUI thread.
+    void setAsyncShellIcons(bool async) { m_asyncShellIcons = async; }
+
     // The same, blocking, for the command line. Returns the installed ids.
     QStringList installNow(const QString &path, Installer::Conflict conflict, QStringList *notes = nullptr);
 
@@ -90,6 +116,7 @@ public:
 signals:
     void changed();
     void installChanged();
+    void appsChanged();
     void errorChanged();
     // The desktop's icon theme changed; the window re-themes its own icons.
     void themeApplied(const QString &id);
@@ -101,6 +128,17 @@ private:
     void setBusy(bool busy, const QString &text = {});
     void runInstall(Installer::Conflict conflict);
     void finishInstall(const QList<Installer::Prepared> &done, const QString &error);
+
+    // Undo keeps the bytes of every file a change touched (or that it was
+    // absent), so undo and redo are exact.
+    struct Snapshot {
+        QList<QPair<QString, QByteArray>> files;  // path, content
+        QStringList absent;
+    };
+    Snapshot snapshot(const QString &id) const;
+    void restore(const Snapshot &snap);
+    const DesktopEntries::Entry *findApp(const QString &id) const;
+    void afterAppChange();
 
     DesktopSettings m_desktop;
     QString m_hookBinary;
@@ -115,4 +153,10 @@ private:
     QString m_busyText;
     QList<Installer::Prepared> m_pending;
     QStringList m_lastInstalled, m_lastNotes;
+
+    QList<DesktopEntries::Entry> m_apps;
+    QList<QPair<QString, Snapshot>> m_undo, m_redo;  // app id, state before
+    bool m_asyncShellIcons = false;
+    bool m_shellIconsRunning = false;
+    bool m_shellIconsAgain = false;
 };

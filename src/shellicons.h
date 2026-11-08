@@ -38,6 +38,11 @@ QStringList defaultApplicationDirs();
 // part of a reverse-DNS id (org.mozilla.firefox -> firefox), then lowercased.
 QStringList candidates(const QString &name);
 
+// The file the launcher should show for `name` in `theme`: the theme's own
+// icon under any candidate name, else the app's own hicolor or pixmaps icon.
+QString resolveForLauncher(IconThemes &themes, const QString &theme, const QString &name, int size = 256,
+                           bool *themed = nullptr);
+
 // Rebuilds the layer for `theme`, replacing the old one atomically.
 bool rebuild(IconThemes &themes, const QString &theme, const QStringList &iconNames,
              const QString &layer = layerPath(), QString *error = nullptr, Stats *stats = nullptr);

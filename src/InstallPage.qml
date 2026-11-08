@@ -10,6 +10,7 @@ Item {
 
     function choose() { filePicker.openFiles(qsTr("Choose icon theme archives")) }
 
+    readonly property bool popupOpen: removeDialog.visible
     readonly property var userThemes: backend.themes.filter(t => t.user)
 
     Connections {

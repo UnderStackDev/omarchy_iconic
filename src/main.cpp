@@ -53,6 +53,7 @@ int main(int argc, char *argv[]) {
 
     Theme theme;
     Backend backend;
+    backend.setAsyncShellIcons(true);
     if (!backend.currentTheme().isEmpty())
         QIcon::setThemeName(backend.currentTheme());
     // Catches up after the theme was changed elsewhere, e.g. by the old plugin.
@@ -63,12 +64,15 @@ int main(int argc, char *argv[]) {
     QQmlApplicationEngine engine;
     engine.addImageProvider("icon", new IconProvider);
     engine.addImageProvider("preview", new PreviewProvider(backend.iconThemes()));
+    engine.addImageProvider("appicon", new AppIconProvider(backend.iconThemes()));
     QObject::connect(&translator, &Translator::changed, &engine, &QQmlEngine::retranslate);
     engine.rootContext()->setContextProperty("translator", &translator);
     engine.rootContext()->setContextProperty("theme", &theme);
     PortalFilePicker filePicker;
+    PortalFilePicker iconPicker;  // its own, so a picked icon never lands in the installer
     engine.rootContext()->setContextProperty("backend", &backend);
     engine.rootContext()->setContextProperty("filePicker", &filePicker);
+    engine.rootContext()->setContextProperty("iconPicker", &iconPicker);
     engine.load(QUrl("qrc:/Main.qml"));
     if (engine.rootObjects().isEmpty())
         return 1;

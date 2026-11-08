@@ -4,6 +4,8 @@
         <file alias="Placeholder.qml">Placeholder.qml</file>
         <file alias="ThemesPage.qml">ThemesPage.qml</file>
         <file alias="InstallPage.qml">InstallPage.qml</file>
+        <file alias="AppsPage.qml">AppsPage.qml</file>
+        <file alias="IconPicker.qml">IconPicker.qml</file>
         <file alias="ThemeCard.qml">ThemeCard.qml</file>
         <file alias="Badge.qml">Badge.qml</file>
         <file alias="OmButton.qml">OmButton.qml</file>

@@ -45,5 +45,5 @@ Popup {
             OmButton { text: dialog.confirmText; danger: true; onClicked: { dialog.confirmed(); dialog.close() } }
         }
     }
-    onOpened: contentItem.forceActiveFocus()
+    onAboutToShow: contentItem.forceActiveFocus()
 }

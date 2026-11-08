@@ -45,6 +45,10 @@ public:
     // plugin at the target size, so they stay sharp.
     static QImage render(const QString &file, const QSize &size);
 
+    // Every icon name in the theme's Applications folders, its parents' and
+    // hicolor's: what an app can sensibly use. Sorted, no -symbolic ones.
+    QStringList appIconNames(const QString &theme);
+
     // Forgets cached lookups, after themes were installed or removed.
     void clearCache();
 
@@ -52,6 +56,7 @@ public:
         QString path;
         int size = 0, minSize = 0, maxSize = 0, threshold = 2, scale = 1;
         QString type = "Threshold";
+        QString context;
     };
     struct Parsed {
         QString name, comment;

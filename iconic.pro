@@ -7,6 +7,7 @@ TEMPLATE = app
 HEADERS += \
     src/backend.h \
     src/cli.h \
+    src/desktopentries.h \
     src/desktopsettings.h \
     src/iconprovider.h \
     src/iconthemes.h \
@@ -21,6 +22,7 @@ SOURCES += \
     src/main.cpp \
     src/backend.cpp \
     src/cli.cpp \
+    src/desktopentries.cpp \
     src/desktopsettings.cpp \
     src/iconthemes.cpp \
     src/installer.cpp \
