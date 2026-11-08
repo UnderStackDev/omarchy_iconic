@@ -3,6 +3,7 @@
 #include <QJsonArray>
 #include <QJsonDocument>
 #include <QJsonObject>
+#include <QRegularExpression>
 #include <QTextStream>
 
 #include "backend.h"
@@ -15,6 +16,8 @@ static const char *usage =
     "  list-themes               List installed icon themes\n"
     "  apply <theme> [--lock|--follow]\n"
     "                            Set the desktop's icon theme\n"
+    "  install <archive|folder>... [--replace|--keep-both] [--apply]\n"
+    "                            Install icon themes into ~/.local/share/icons\n"
     "  lock | follow             Keep the current theme across Omarchy theme\n"
     "                            switches, or let each Omarchy theme pick\n"
     "  shell-icons               Rebuild the launcher/dock icon layer\n"
@@ -108,6 +111,37 @@ int Cli::run(const QStringList &rawArgs) {
             print(command == "lock" ? QString("Locked to %1").arg(backend.currentTheme())
                                     : QString("Following the Omarchy theme"));
         return 0;
+    }
+
+    if (command == "install") {
+        const QStringList sources = args.mid(1).filter(QRegularExpression("^[^-]"));
+        if (sources.isEmpty())
+            return failure("install needs an archive or folder", json);
+        const auto conflict = args.contains("--replace")     ? Installer::Conflict::Replace
+                              : args.contains("--keep-both") ? Installer::Conflict::KeepBoth
+                                                             : Installer::Conflict::Skip;
+        QStringList installed, notes;
+        for (const QString &source : sources) {
+            QStringList n;
+            installed << backend.installNow(source, conflict, &n);
+            notes << n;
+            if (!backend.error().isEmpty() && installed.isEmpty())
+                return failure(backend.error(), json);
+        }
+        if (args.contains("--apply") && !installed.isEmpty() && !backend.applyTheme(installed.first()))
+            return failure(backend.error(), json);
+        if (json) {
+            print(QJsonDocument(QJsonObject{{"ok", true},
+                                            {"installed", QJsonArray::fromStringList(installed)},
+                                            {"notes", QJsonArray::fromStringList(notes)}})
+                      .toJson(QJsonDocument::Compact));
+        } else {
+            for (const QString &id : installed)
+                print("Installed " + id);
+            for (const QString &note : notes)
+                print(note);
+        }
+        return installed.isEmpty() ? 1 : 0;
     }
 
     if (command == "shell-icons") {

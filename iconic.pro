@@ -1,4 +1,4 @@
-QT += core gui qml quick quickcontrols2 dbus
+QT += core gui qml quick quickcontrols2 dbus concurrent
 
 CONFIG += c++17 release
 TARGET = iconic
@@ -10,6 +10,8 @@ HEADERS += \
     src/desktopsettings.h \
     src/iconprovider.h \
     src/iconthemes.h \
+    src/installer.h \
+    src/portalfilepicker.h \
     src/previewprovider.h \
     src/shellicons.h \
     src/theme.h \
@@ -21,6 +23,8 @@ SOURCES += \
     src/cli.cpp \
     src/desktopsettings.cpp \
     src/iconthemes.cpp \
+    src/installer.cpp \
+    src/portalfilepicker.cpp \
     src/shellicons.cpp \
     src/theme.cpp \
     src/translator.cpp

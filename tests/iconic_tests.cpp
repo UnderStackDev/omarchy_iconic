@@ -2,12 +2,15 @@
 #include <QFile>
 #include <QFileInfo>
 #include <QTemporaryDir>
+#include <QUrl>
 #include <QtTest>
 
 #include "backend.h"
 #include "desktopsettings.h"
 #include "iconthemes.h"
 #include "shellicons.h"
+#include "installer.h"
+#include <QProcess>
 #include <QImage>
 #include "theme.h"
 #include "translator.h"
@@ -219,6 +222,134 @@ private slots:
         QCOMPARE(ShellIcons::builtFor(layer), QString("Child"));
         QVERIFY(!QFileInfo::exists(layer + "/apps/org.example.Tool.svg"));
         QCOMPARE(QDir(h + "/layer").entryList(QDir::AllEntries | QDir::NoDotAndDotDot | QDir::Hidden), QStringList({"iconic-apps"}));
+    }
+
+    void listingLimitsCountSizeAndEntries()
+    {
+        const QByteArray listing =
+            "drwxr-xr-x  0 a b       0 Jan  1  2026 Theme/\n"
+            "-rw-r--r--  0 a b    1024 Jan  1  2026 Theme/index.theme\n"
+            "lrwxr-xr-x  0 a b       0 Jan  1  2026 Theme/x.svg -> y.svg\n";
+        qint64 bytes = 0;
+        int entries = 0;
+        QVERIFY(Installer::listingWithinLimits(listing, &bytes, &entries));
+        QCOMPARE(bytes, qint64(1024));
+        QCOMPARE(entries, 3);
+        QVERIFY(!Installer::listingWithinLimits("-rw-r--r-- 0 a b 99999999999 Jan 1 2026 big\n"));
+    }
+
+    void copyTreeKeepsInternalLinksOnly()
+    {
+        const QString h = m_home.path() + "/copy";
+        write(h + "/src/Theme/index.theme", "[Icon Theme]\n");
+        write(h + "/src/Theme/32/apps/a.svg", "<svg/>");
+        QVERIFY(QFile::link("a.svg", h + "/src/Theme/32/apps/b.svg"));
+        write(h + "/secret.txt", "nope");
+        QVERIFY(QFile::link(h + "/secret.txt", h + "/src/Theme/32/apps/evil.svg"));
+        QVERIFY(QFile::link("/etc/passwd", h + "/src/Theme/32/apps/passwd.svg"));
+
+        QVERIFY(Installer::copyTree(h + "/src/Theme", h + "/dst/Theme"));
+        QCOMPARE(read(h + "/dst/Theme/32/apps/a.svg"), QByteArray("<svg/>"));
+        QCOMPARE(QFileInfo(h + "/dst/Theme/32/apps/b.svg").symLinkTarget(), h + "/dst/Theme/32/apps/a.svg");
+        QVERIFY(!QFileInfo(h + "/dst/Theme/32/apps/evil.svg").exists());
+        QVERIFY(!QFileInfo(h + "/dst/Theme/32/apps/passwd.svg").isSymLink());
+
+        // A variant may link into its sibling when both came in one archive.
+        write(h + "/src/Base/32/apps/c.svg", "<svg/>");
+        QDir().mkpath(h + "/src/Variant/32");
+        QVERIFY(QFile::link("../../Base/32/apps", h + "/src/Variant/32/apps"));
+        QVERIFY(Installer::copyTree(h + "/src/Variant", h + "/dst/Variant", h + "/src"));
+        QCOMPARE(QFileInfo(h + "/dst/Variant/32/apps").symLinkTarget(), h + "/dst/Base/32/apps");
+        // Without the archive as the allowed root, it is dropped.
+        QVERIFY(Installer::copyTree(h + "/src/Variant", h + "/dst2/Variant"));
+        QVERIFY(!QFileInfo(h + "/dst2/Variant/32/apps").isSymLink());
+    }
+
+    void archiveInstallFindsThemesAndHandlesConflicts()
+    {
+        const QString h = m_home.path() + "/arch";
+        write(h + "/pack/Nice/index.theme", "[Icon Theme]\nName=Nice Icons\nDirectories=48/apps\n\n[48/apps]\nSize=48\n");
+        write(h + "/pack/Nice/48/apps/app.png", "x");
+        write(h + "/pack/Nice-Dark/index.theme", "[Icon Theme]\nName=Nice Dark\nInherits=Nice\nDirectories=48/apps\n\n[48/apps]\nSize=48\n");
+        write(h + "/pack/Pointer/index.theme", "[Icon Theme]\nName=Pointer\n");
+        QProcess tar;
+        tar.setWorkingDirectory(h + "/pack");
+        tar.start("bsdtar", {"-czf", h + "/themes.tar.gz", "Nice", "Nice-Dark", "Pointer"});
+        QVERIFY(tar.waitForFinished() && tar.exitCode() == 0);
+
+        const QString target = h + "/icons";
+        Installer::Prepared prepared = Installer::prepare(h + "/themes.tar.gz", target);
+        QVERIFY2(prepared.ok(), qPrintable(prepared.error));
+        QStringList ids;
+        for (const auto &t : prepared.themes) ids << t.id;
+        ids.sort();
+        QCOMPARE(ids, QStringList({"Nice", "Nice-Dark"}));
+        QCOMPARE(prepared.skipped.size(), 1);
+        QVERIFY(prepared.skipped.first().contains("cursor"));
+
+        QVERIFY(Installer::install(prepared, Installer::Conflict::Skip, target));
+        QVERIFY(QFile::exists(target + "/Nice/48/apps/app.png"));
+        QVERIFY(QFile::exists(target + "/Nice-Dark/index.theme"));
+        QVERIFY(QDir(target).entryList(QDir::Hidden | QDir::Dirs | QDir::NoDotAndDotDot).filter(".iconic").isEmpty());
+
+        // Again: everything exists now.
+        prepared = Installer::prepare(h + "/themes.tar.gz", target);
+        QVERIFY(prepared.themes.first().exists);
+        QString error;
+        QVERIFY(!Installer::install(prepared, Installer::Conflict::Skip, target, &error));
+        QVERIFY(error.contains("already installed"));
+
+        prepared = Installer::prepare(h + "/themes.tar.gz", target);
+        QVERIFY(Installer::install(prepared, Installer::Conflict::KeepBoth, target));
+        QVERIFY(QFile::exists(target + "/Nice-2/index.theme"));
+
+        write(target + "/Nice/stale.txt", "old");
+        prepared = Installer::prepare(h + "/themes.tar.gz", target);
+        QVERIFY(Installer::install(prepared, Installer::Conflict::Replace, target));
+        QVERIFY(!QFile::exists(target + "/Nice/stale.txt"));
+    }
+
+    void prepareRejectsWhatIsNotATheme()
+    {
+        const QString h = m_home.path() + "/bad";
+        write(h + "/notes.txt", "hello");
+        QVERIFY(!Installer::prepare(h + "/notes.txt", h + "/icons").ok());
+        QVERIFY(!Installer::prepare(h + "/missing.zip", h + "/icons").ok());
+        QDir().mkpath(h + "/empty");
+        QVERIFY(Installer::prepare(h + "/empty", h + "/icons").error.contains("No icon theme"));
+    }
+
+    void backendInstallsDroppedFoldersInTheBackground()
+    {
+        const QString h = m_home.path();
+        write(h + "/drop/Dropped/index.theme", "[Icon Theme]\nName=Dropped\nDirectories=16/apps\n\n[16/apps]\nSize=16\n");
+        Backend backend(nullptr, m_gsettings, "/usr/bin/iconic");
+        backend.installPaths({QUrl::fromLocalFile(h + "/drop/Dropped").toString()});
+        QTRY_VERIFY(!backend.busy());
+        QCOMPARE(backend.lastInstalled(), QStringList({"Dropped"}));
+        QVERIFY(QFile::exists(h + "/.local/share/icons/Dropped/index.theme"));
+
+        // Dropping it again asks before touching the installed copy.
+        backend.installPaths({h + "/drop/Dropped"});
+        QTRY_VERIFY(!backend.busy() && !backend.conflicts().isEmpty());
+        QCOMPARE(backend.conflicts(), QStringList({"Dropped"}));
+        backend.resolveConflicts("cancel");
+        QVERIFY(backend.conflicts().isEmpty());
+
+        // A variant linking into Dropped keeps it from being removed first.
+        write(h + "/.local/share/icons/Variant/index.theme", "[Icon Theme]\nName=Variant\nDirectories=16/apps\n\n[16/apps]\nSize=16\n");
+        QDir().mkpath(h + "/.local/share/icons/Variant/16");
+        QFile::remove(h + "/.local/share/icons/Variant/16/apps");
+        QVERIFY(QFile::link("../../Dropped/16/apps", h + "/.local/share/icons/Variant/16/apps"));
+        backend.refresh();
+        QCOMPARE(backend.dependents("Dropped"), QStringList({"Variant"}));
+        QVERIFY(!backend.removeTheme("Dropped"));
+        QVERIFY(QFile::exists(h + "/.local/share/icons/Dropped/index.theme"));
+        QVERIFY(backend.removeTheme("Variant"));
+        QVERIFY(backend.removeTheme("Dropped"));
+
+        backend.installPaths({"https://example.com/theme.zip"});
+        QVERIFY(backend.error().contains("Download"));
     }
 
     void themeFallsBack()

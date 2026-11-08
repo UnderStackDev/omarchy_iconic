@@ -231,7 +231,11 @@ Item {
     ConfirmDialog {
         id: removeDialog
         title: qsTr("Remove icon theme?")
-        message: page.selectedTheme ? qsTr("%1 will be deleted from %2.").arg(page.selectedTheme.id).arg(page.selectedTheme.path) : ""
+        readonly property var users: page.selectedTheme ? backend.dependents(page.selectedTheme.id) : []
+        message: !page.selectedTheme ? ""
+                 : users.length > 0
+                   ? qsTr("%1 uses files from %2. Remove %1 first.").arg(users.join(", ")).arg(page.selectedTheme.id)
+                   : qsTr("%1 will be deleted from %2.").arg(page.selectedTheme.id).arg(page.selectedTheme.path)
         confirmText: qsTr("Remove")
         onConfirmed: if (page.selectedTheme) backend.removeTheme(page.selectedTheme.id)
     }

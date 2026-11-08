@@ -12,6 +12,8 @@ and rename or re-icon single apps. Work in progress — see `PLAN.md`.
 | Arrows | Pick a theme |
 | `Space` / `Enter` | Apply the picked theme |
 | `/` | Search themes |
+| `Del` | Remove the picked user theme |
+| `O` | Choose theme files to install (Install tab) |
 | `L` | Keep my choice on or off |
 | `?` | Show or hide shortcuts |
 | `Q` | Quit |
@@ -20,6 +22,8 @@ and rename or re-icon single apps. Work in progress — see `PLAN.md`.
 
 ```sh
 iconic status | list-themes | apply <theme> [--lock|--follow] | lock | follow   # all take --json
+iconic install <archive|folder>... [--replace|--keep-both] [--apply]
+iconic shell-icons                                                          # rebuild launcher/dock icons
 ```
 
 ## Build

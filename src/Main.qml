@@ -39,6 +39,7 @@ ApplicationWindow {
     Shortcut { sequence: "Space"; context: Qt.ApplicationShortcut; enabled: !win.typing && win.tab === 0; onActivated: themesPage.applySelected() }
     Shortcut { sequence: "L"; context: Qt.ApplicationShortcut; enabled: !win.typing; onActivated: backend.setLock(!backend.lock) }
     Shortcut { sequence: "Del"; context: Qt.ApplicationShortcut; enabled: !win.typing && win.tab === 0; onActivated: themesPage.askRemove() }
+    Shortcut { sequence: "O"; context: Qt.ApplicationShortcut; enabled: !win.typing && win.tab === 1 && !backend.busy; onActivated: installPage.choose() }
     Shortcut { sequence: "Esc"; context: Qt.ApplicationShortcut; enabled: win.helpVisible; onActivated: win.helpVisible = false }
 
     // Right-to-left languages mirror the window; the Translator sets the
@@ -141,7 +142,7 @@ ApplicationWindow {
                 currentIndex: win.tab
 
                 ThemesPage { id: themesPage }
-                Placeholder { text: qsTr("Drop icon themes here — coming in phase 2") }
+                InstallPage { id: installPage }
                 Placeholder { text: qsTr("App names and icons — coming in phase 3") }
             }
 
@@ -158,11 +159,12 @@ ApplicationWindow {
                     spacing: 16
                     clip: true
                     KeyHint { key: "1-3"; action: qsTr("tabs") }
-                    KeyHint { key: "←↑→↓"; action: qsTr("pick") }
-                    KeyHint { key: "space"; action: qsTr("apply") }
-                    KeyHint { key: "/"; action: qsTr("search") }
+                    KeyHint { visible: win.tab === 0; key: "←↑→↓"; action: qsTr("pick") }
+                    KeyHint { visible: win.tab === 0; key: "space"; action: qsTr("apply") }
+                    KeyHint { visible: win.tab === 0; key: "/"; action: qsTr("search") }
+                    KeyHint { visible: win.tab === 0; key: "del"; action: qsTr("remove") }
+                    KeyHint { visible: win.tab === 1; key: "o"; action: qsTr("choose files") }
                     KeyHint { key: "l"; action: qsTr("keep my choice") }
-                    KeyHint { key: "del"; action: qsTr("remove") }
                     KeyHint { key: "?"; action: qsTr("all keys") }
                     KeyHint { key: "q"; action: qsTr("quit") }
                 }
@@ -229,6 +231,7 @@ ApplicationWindow {
                         KeyHint { key: "/" }              Text { text: qsTr("Search themes"); color: theme.foreground; font.family: theme.font; font.pixelSize: 12 }
                         KeyHint { key: "l" }              Text { text: qsTr("Keep my choice on or off"); color: theme.foreground; font.family: theme.font; font.pixelSize: 12 }
                         KeyHint { key: "del" }            Text { text: qsTr("Remove the picked user theme"); color: theme.foreground; font.family: theme.font; font.pixelSize: 12 }
+                        KeyHint { key: "o" }              Text { text: qsTr("Choose theme files to install (Install tab)"); color: theme.foreground; font.family: theme.font; font.pixelSize: 12 }
                         KeyHint { key: "?" }              Text { text: qsTr("Show or hide this"); color: theme.foreground; font.family: theme.font; font.pixelSize: 12 }
                         KeyHint { key: "q" }              Text { text: qsTr("Quit"); color: theme.foreground; font.family: theme.font; font.pixelSize: 12 }
                     }

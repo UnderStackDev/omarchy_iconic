@@ -11,6 +11,8 @@
 #include "backend.h"
 #include "cli.h"
 #include "iconprovider.h"
+#include "installer.h"
+#include "portalfilepicker.h"
 #include "previewprovider.h"
 #include "theme.h"
 #include "translator.h"
@@ -55,6 +57,7 @@ int main(int argc, char *argv[]) {
         QIcon::setThemeName(backend.currentTheme());
     // Catches up after the theme was changed elsewhere, e.g. by the old plugin.
     backend.updateShellIcons(true);
+    Installer::cleanupStale();
     QObject::connect(&backend, &Backend::themeApplied, &app, [](const QString &id) { QIcon::setThemeName(id); });
 
     QQmlApplicationEngine engine;
@@ -63,7 +66,9 @@ int main(int argc, char *argv[]) {
     QObject::connect(&translator, &Translator::changed, &engine, &QQmlEngine::retranslate);
     engine.rootContext()->setContextProperty("translator", &translator);
     engine.rootContext()->setContextProperty("theme", &theme);
+    PortalFilePicker filePicker;
     engine.rootContext()->setContextProperty("backend", &backend);
+    engine.rootContext()->setContextProperty("filePicker", &filePicker);
     engine.load(QUrl("qrc:/Main.qml"));
     if (engine.rootObjects().isEmpty())
         return 1;
