@@ -5,10 +5,10 @@ Row {
     id: hint
     property string key
     property string action
-    spacing: 6
+    spacing: 7
     Rectangle {
-        width: keyText.implicitWidth + 10
-        height: 18
+        width: keyText.implicitWidth + 12
+        height: 22
         anchors.verticalCenter: parent.verticalCenter
         radius: Math.min(2, theme.radius)
         color: "transparent"
@@ -19,7 +19,7 @@ Row {
             anchors.centerIn: parent
             text: hint.key
             font.family: theme.font
-            font.pixelSize: 11
+            font.pixelSize: 12
             color: theme.foreground
         }
     }
@@ -27,7 +27,7 @@ Row {
         anchors.verticalCenter: parent.verticalCenter
         text: hint.action
         font.family: theme.font
-        font.pixelSize: 11
+        font.pixelSize: 12
         color: theme.dimForeground
     }
 }

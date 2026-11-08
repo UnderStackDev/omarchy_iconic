@@ -162,7 +162,7 @@ Item {
                 spacing: 4
                 model: page.filtered
                 boundsBehavior: Flickable.StopAtBounds
-                ScrollBar.vertical: ScrollBar {}
+                ScrollBar.vertical: OmScrollBar {}
                 Keys.onUpPressed: page.moveSelection(-1)
                 Keys.onDownPressed: page.moveSelection(1)
                 Keys.onReturnPressed: nameInput.forceActiveFocus()
@@ -171,7 +171,7 @@ Item {
                     id: row
                     required property var modelData
                     readonly property bool selected: modelData.id === page.selectedId
-                    width: ListView.view.width
+                    width: ListView.view.width - 12  // room for the scrollbar
                     height: 44
                     radius: Math.min(4, theme.radius)
                     color: selected ? theme.selection : (hover.hovered ? theme.lighterBackground : theme.darkBackground)

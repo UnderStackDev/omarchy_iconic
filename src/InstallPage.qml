@@ -228,12 +228,12 @@ Item {
             spacing: 6
             model: page.userThemes
             boundsBehavior: Flickable.StopAtBounds
-            ScrollBar.vertical: ScrollBar {}
+            ScrollBar.vertical: OmScrollBar {}
 
             delegate: Rectangle {
                 id: row
                 required property var modelData
-                width: ListView.view.width
+                width: ListView.view.width - 12  // room for the scrollbar
                 height: 48
                 radius: Math.min(4, theme.radius)
                 color: theme.darkBackground

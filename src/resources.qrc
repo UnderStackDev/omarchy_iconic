@@ -9,6 +9,7 @@
         <file alias="ThemeCard.qml">ThemeCard.qml</file>
         <file alias="Badge.qml">Badge.qml</file>
         <file alias="OmButton.qml">OmButton.qml</file>
+        <file alias="OmScrollBar.qml">OmScrollBar.qml</file>
         <file alias="OmCheck.qml">OmCheck.qml</file>
         <file alias="SectionLabel.qml">SectionLabel.qml</file>
         <file alias="KeyHint.qml">KeyHint.qml</file>

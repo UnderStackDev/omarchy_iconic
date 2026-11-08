@@ -78,7 +78,7 @@ ApplicationWindow {
             // Header: app name, tabs, and what the desktop uses right now.
             Rectangle {
                 Layout.fillWidth: true
-                implicitHeight: 48
+                implicitHeight: 52
                 color: theme.darkBackground
 
                 RowLayout {
@@ -87,59 +87,45 @@ ApplicationWindow {
                     anchors.rightMargin: 18
                     spacing: 18
 
-                    Row {
-                        spacing: 10
-                        Image {
-                            anchors.verticalCenter: parent.verticalCenter
-                            width: 18; height: 18
-                            sourceSize: Qt.size(18, 18)
-                            source: "image://preview/" + encodeURIComponent(backend.currentTheme) + "/folder|inode-directory"
-                        }
-                        Text {
-                            anchors.verticalCenter: parent.verticalCenter
-                            text: "ICONIC"
-                            font.family: theme.font
-                            font.pixelSize: 13
-                            font.bold: true
-                            font.letterSpacing: 2
-                            color: theme.accent
-                        }
+                    Text {
+                        text: "ICONIC"
+                        font.family: theme.font
+                        font.pixelSize: 13
+                        font.bold: true
+                        font.letterSpacing: 2
+                        color: theme.accent
                     }
 
-                    // Tabs as a segmented strip.
-                    Rectangle {
-                        implicitWidth: tabRow.implicitWidth + 2
-                        implicitHeight: 28
-                        radius: Math.min(4, theme.radius)
-                        color: "transparent"
-                        border.width: 1
-                        border.color: theme.muted
-                        Row {
-                            id: tabRow
-                            anchors.centerIn: parent
-                            Repeater {
-                                model: win.tabNames
-                                Rectangle {
-                                    required property string modelData
-                                    required property int index
-                                    width: tabLabel.implicitWidth + 28
-                                    height: 26
-                                    color: win.tab === index ? theme.selection : (tabArea.containsMouse ? theme.lighterBackground : "transparent")
-                                    Text {
-                                        id: tabLabel
-                                        anchors.centerIn: parent
-                                        text: (parent.index + 1) + " " + parent.modelData
-                                        font.family: theme.font
-                                        font.pixelSize: 12
-                                        color: win.tab === parent.index ? theme.accent : theme.foreground
-                                    }
-                                    MouseArea {
-                                        id: tabArea
-                                        anchors.fill: parent
-                                        hoverEnabled: true
-                                        cursorShape: Qt.PointingHandCursor
-                                        onClicked: win.tab = parent.index
-                                    }
+                    // Tabs, each its own button.
+                    Row {
+                        spacing: 8
+                        Repeater {
+                            model: win.tabNames
+                            Rectangle {
+                                id: tabButton
+                                required property string modelData
+                                required property int index
+                                readonly property bool current: win.tab === index
+                                width: tabLabel.implicitWidth + 28
+                                height: 28
+                                radius: Math.min(4, theme.radius)
+                                color: current ? theme.selection : (tabArea.containsMouse ? theme.lighterBackground : "transparent")
+                                border.width: 1
+                                border.color: current ? theme.accent : theme.muted
+                                Text {
+                                    id: tabLabel
+                                    anchors.centerIn: parent
+                                    text: (tabButton.index + 1) + " " + tabButton.modelData
+                                    font.family: theme.font
+                                    font.pixelSize: 12
+                                    color: tabButton.current ? theme.accent : theme.foreground
+                                }
+                                MouseArea {
+                                    id: tabArea
+                                    anchors.fill: parent
+                                    hoverEnabled: true
+                                    cursorShape: Qt.PointingHandCursor
+                                    onClicked: win.tab = tabButton.index
                                 }
                             }
                         }
@@ -171,15 +157,18 @@ ApplicationWindow {
             // Footer: every shortcut in sight, like Omarchy's own tools.
             Rectangle {
                 Layout.fillWidth: true
-                implicitHeight: 34
+                implicitHeight: 46
                 color: theme.darkBackground
                 Rectangle { anchors.top: parent.top; width: parent.width; height: 1; color: theme.muted }
-                Flow {
+                // One row; on a narrow window the last hints are cut, never wrapped.
+                Item {
                     anchors.fill: parent
-                    anchors.leftMargin: 18
-                    anchors.topMargin: 8
-                    spacing: 16
+                    anchors.leftMargin: 20
+                    anchors.rightMargin: 20
                     clip: true
+                Row {
+                    anchors.verticalCenter: parent.verticalCenter
+                    spacing: 20
                     KeyHint { key: "1-3"; action: qsTr("tabs") }
                     KeyHint { visible: win.tab === 0; key: "←↑→↓"; action: qsTr("pick") }
                     KeyHint { visible: win.tab === 0; key: "space"; action: qsTr("apply") }
@@ -196,6 +185,7 @@ ApplicationWindow {
                     KeyHint { key: "?"; action: qsTr("all keys") }
                     KeyHint { key: "q"; action: qsTr("quit") }
                 }
+                }
             }
         }
 
@@ -211,7 +201,7 @@ ApplicationWindow {
         Rectangle {
             anchors.horizontalCenter: parent.horizontalCenter
             anchors.bottom: parent.bottom
-            anchors.bottomMargin: 96
+            anchors.bottomMargin: 108
             visible: backend.error.length > 0
             width: Math.min(parent.width - 40, errorRow.implicitWidth + 32)
             height: errorRow.implicitHeight + 20

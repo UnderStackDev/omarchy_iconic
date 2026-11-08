@@ -79,7 +79,7 @@ Popup {
             cellHeight: 92
             model: picker.names
             boundsBehavior: Flickable.StopAtBounds
-            ScrollBar.vertical: ScrollBar {}
+            ScrollBar.vertical: OmScrollBar {}
             keyNavigationEnabled: true
             highlightFollowsCurrentItem: true
             Keys.onReturnPressed: if (currentIndex >= 0) { picker.chosen(picker.names[currentIndex]); picker.close() }

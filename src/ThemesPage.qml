@@ -151,12 +151,13 @@ Item {
             Layout.fillHeight: true
             clip: true
             focus: true
-            readonly property int columns: Math.max(1, Math.floor(width / 290))
-            cellWidth: Math.floor(width / columns)
+            // 12 px on the right stay free for the scrollbar.
+            readonly property int columns: Math.max(1, Math.floor((width - 12) / 290))
+            cellWidth: Math.floor((width - 12) / columns)
             cellHeight: 92
             model: page.filtered
             boundsBehavior: Flickable.StopAtBounds
-            ScrollBar.vertical: ScrollBar {}
+            ScrollBar.vertical: OmScrollBar {}
 
             Keys.onLeftPressed: page.moveSelection(-1)
             Keys.onRightPressed: page.moveSelection(1)
