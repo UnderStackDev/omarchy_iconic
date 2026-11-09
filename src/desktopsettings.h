@@ -15,7 +15,16 @@ QString value(const QString &path, const QString &section, const QString &key);
 // stays on the user's pick. Stored in ~/.config/iconic/config.toml.
 struct IconicConfig {
     bool lock = false;
+    // The icon theme picked in Iconic, in both modes.
     QString theme;
+    // The Omarchy theme that was active when `theme` was picked. In Follow
+    // mode Iconic's pick stands until the Omarchy theme actually changes;
+    // Omarchy updates re-run theme-set with the same theme, and that alone
+    // must not throw the pick away.
+    QString omarchyTheme;
+
+    // The Omarchy theme in use now (~/.local/state/omarchy/current/theme.name).
+    static QString currentOmarchyTheme();
 
     static QString path();
     static IconicConfig load(const QString &file = path());
@@ -38,18 +47,21 @@ public:
     bool syncFiles(const QString &theme, QString *error = nullptr) const;
 
     static QString parseGsettingsString(const QString &output);
+    QString program() const;
 
 private:
     QString m_gsettings;
 };
 
-// The Omarchy theme-set hook that keeps the icon theme after a theme switch.
-// Omarchy runs theme-set hooks after it has set its own icon theme, so the
-// hook gets the last word.
+// Omarchy hooks that keep Iconic's choices: theme-set runs after an Omarchy
+// theme switch (after Omarchy has set its own icon theme, so the hook gets
+// the last word); post-update runs after `omarchy update`, whose migrations
+// can refresh the theme and re-copy Omarchy's own launchers.
 namespace ThemeSetHook {
-QString path();
-QString script(const QString &binary);
-// Writes the hook for this binary, only when it differs. Returns false and
-// sets `error` when it can't be written.
+QStringList events();
+QString path(const QString &event = "theme-set");
+QString script(const QString &binary, const QString &event = "theme-set");
+// Writes every hook for this binary, only where it differs. Returns false
+// and sets `error` when one can't be written.
 bool ensure(const QString &binary, QString *error = nullptr);
 }

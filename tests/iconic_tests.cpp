@@ -1,5 +1,6 @@
 #include <QDir>
 #include <QFile>
+#include <QDateTime>
 #include <QFileInfo>
 #include <QTemporaryDir>
 #include <QUrl>
@@ -147,26 +148,126 @@ private slots:
 
     void lockSurvivesAnOmarchyThemeSwitch()
     {
+        const QString omarchy = m_home.path() + "/.local/state/omarchy/current/theme.name";
+        write(omarchy, "tokyo-night\n");
         Backend backend(nullptr, m_gsettings, "/usr/bin/iconic");
         QVERIFY(backend.applyTheme("Plain"));
         QVERIFY(backend.setLock(true));
         QCOMPARE(backend.lockedTheme(), QString("Plain"));
-        QVERIFY(QFile::exists(ThemeSetHook::path()));
+        QVERIFY(QFile::exists(ThemeSetHook::path("theme-set")));
+        QVERIFY(QFile::exists(ThemeSetHook::path("post-update")));
+        QVERIFY(read(ThemeSetHook::path("post-update")).contains("hook post-update"));
         QVERIFY(!backend.applyTheme("NotInstalled"));
 
         // Omarchy switches theme and sets its own icon theme in gsettings.
+        write(omarchy, "catppuccin\n");
         write(m_home.path() + "/gsettings.value", "Child");
         Backend hook(nullptr, m_gsettings, "/usr/bin/iconic");
         QVERIFY(hook.runThemeSetHook());
         QCOMPARE(DesktopSettings(m_gsettings).currentTheme(), QString("Plain"));
 
-        // In Follow mode the hook keeps Omarchy's pick and syncs the files.
+        // In Follow mode a new Omarchy theme picks, and that pick is kept.
         QVERIFY(hook.setLock(false));
+        write(omarchy, "rose-pine\n");
         write(m_home.path() + "/gsettings.value", "Child");
         Backend follow(nullptr, m_gsettings, "/usr/bin/iconic");
         QVERIFY(follow.runThemeSetHook());
         QCOMPARE(DesktopSettings(m_gsettings).currentTheme(), QString("Child"));
         QCOMPARE(IniFile::value(m_home.path() + "/.config/kdeglobals", "Icons", "Theme"), QString("Child"));
+        QCOMPARE(IconicConfig::load().theme, QString("Child"));
+        QCOMPARE(IconicConfig::load().omarchyTheme, QString("rose-pine"));
+    }
+
+    void followKeepsIconicsPickWhenAnUpdateRefreshesTheSameTheme()
+    {
+        const QString omarchy = m_home.path() + "/.local/state/omarchy/current/theme.name";
+        write(omarchy, "nord\n");
+        Backend backend(nullptr, m_gsettings, "/usr/bin/iconic");
+        QVERIFY(backend.setLock(false));
+        QVERIFY(backend.applyTheme("Plain"));
+
+        // `omarchy update` runs a migration with omarchy-theme-refresh: the
+        // same Omarchy theme is set again and its icon theme lands in gsettings.
+        write(m_home.path() + "/gsettings.value", "Child");
+        Backend update(nullptr, m_gsettings, "/usr/bin/iconic");
+        QVERIFY(update.runPostUpdateHook());
+        QCOMPARE(DesktopSettings(m_gsettings).currentTheme(), QString("Plain"));
+
+        // Only a real Omarchy theme change lets Omarchy pick again.
+        write(omarchy, "gruvbox\n");
+        write(m_home.path() + "/gsettings.value", "Child");
+        Backend switched(nullptr, m_gsettings, "/usr/bin/iconic");
+        QVERIFY(switched.runThemeSetHook());
+        QCOMPARE(DesktopSettings(m_gsettings).currentTheme(), QString("Child"));
+    }
+
+    void lockTakesTheLiveThemeNotAStaleOne()
+    {
+        write(m_home.path() + "/gsettings.value", "Plain");
+        Backend backend(nullptr, m_gsettings, "/usr/bin/iconic");
+        // The Omarchy theme changes while the window is open.
+        write(m_home.path() + "/gsettings.value", "Child");
+        QVERIFY(backend.setLock(true));
+        QCOMPARE(backend.lockedTheme(), QString("Child"));
+        QVERIFY(backend.setLock(false));
+    }
+
+    void editsFromBeforeTheListAreFoundOnce()
+    {
+        const QString h = m_home.path();
+        const QString user = h + "/.local/share/applications";
+        // A launcher changed by 0.1.0: an override copy, but no apps.json yet.
+        write(h + "/system/applications/old.desktop", "[Desktop Entry]\nType=Application\nName=Old\nIcon=old\n");
+        write(user + "/old.desktop", "[Desktop Entry]\nType=Application\nName=Renamed\nIcon=old\nX-Iconic-Override=true\n");
+        QFile::remove(h + "/.config/iconic/apps.json");
+        Backend backend(nullptr, m_gsettings, "/usr/bin/iconic");
+        QCOMPARE(backend.reapplyAppEdits(), 0);
+        QVERIFY(read(h + "/.config/iconic/apps.json").contains("Renamed"));
+        QFile::remove(user + "/old.desktop");
+        QFile::remove(h + "/system/applications/old.desktop");
+        QFile::remove(h + "/.config/iconic/apps.json");
+    }
+
+    void updatesThatRewriteLaunchersGetTheEditsBack()
+    {
+        const QString h = m_home.path();
+        const QString user = h + "/.local/share/applications";
+        // An Omarchy-shipped web app lives in the user folder.
+        write(user + "/Chat.desktop", "[Desktop Entry]\nType=Application\nName=Chat\nIcon=chat\nExec=omarchy-launch-webapp https://chat\n");
+        write(h + "/system/applications/viewer.desktop", "[Desktop Entry]\nType=Application\nName=Viewer\nIcon=viewer\nExec=viewer-1\n");
+        Backend backend(nullptr, m_gsettings, "/usr/bin/iconic");
+        QVERIFY(backend.saveApp("Chat", "Messages", "", false));
+        QVERIFY(backend.saveApp("viewer", "Pictures", "image-viewer", false));
+        QVERIFY(read(h + "/.config/iconic/apps.json").contains("Messages"));
+
+        // The update re-copies Omarchy's launcher and the package changes its own.
+        write(user + "/Chat.desktop", "[Desktop Entry]\nType=Application\nName=Chat\nIcon=chat2\nExec=omarchy-launch-webapp https://chat2\n");
+        {
+            // Our copy is older than the package's new launcher.
+            QFile copy(user + "/viewer.desktop");
+            QVERIFY(copy.open(QIODevice::ReadWrite));
+            QVERIFY(copy.setFileTime(QDateTime::currentDateTime().addSecs(-60), QFileDevice::FileModificationTime));
+        }
+        write(h + "/system/applications/viewer.desktop", "[Desktop Entry]\nType=Application\nName=Viewer\nIcon=viewer\nExec=viewer-2\n");
+
+        Backend update(nullptr, m_gsettings, "/usr/bin/iconic");
+        QCOMPARE(update.reapplyAppEdits(), 2);
+        QCOMPARE(DesktopEntries::value(user + "/Chat.desktop", "Name"), QString("Messages"));
+        QCOMPARE(DesktopEntries::value(user + "/Chat.desktop", "Exec"), QString("omarchy-launch-webapp https://chat2"));
+        QCOMPARE(DesktopEntries::value(user + "/viewer.desktop", "Name"), QString("Pictures"));
+        QCOMPARE(DesktopEntries::value(user + "/viewer.desktop", "Icon"), QString("image-viewer"));
+        QCOMPARE(DesktopEntries::value(user + "/viewer.desktop", "Exec"), QString("viewer-2"));
+        // Reset still goes back to the new original, and forgets the edit.
+        QVERIFY(update.resetApp("Chat"));
+        QCOMPARE(DesktopEntries::value(user + "/Chat.desktop", "Name"), QString("Chat"));
+        QCOMPARE(DesktopEntries::value(user + "/Chat.desktop", "Icon"), QString("chat2"));
+        QVERIFY(!read(h + "/.config/iconic/apps.json").contains("Messages"));
+        QCOMPARE(update.reapplyAppEdits(), 0);
+
+        // Leave the shared fixture folders as other tests expect them.
+        QVERIFY(update.resetApp("viewer"));
+        QFile::remove(h + "/system/applications/viewer.desktop");
+        QFile::remove(user + "/Chat.desktop");
     }
 
     void onlyUnusedUserThemesCanBeRemoved()

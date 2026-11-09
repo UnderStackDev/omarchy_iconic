@@ -27,6 +27,7 @@ static const char *usage =
     "  app reset <id>            Undo Iconic's changes to a launcher\n"
     "  shell-icons               Rebuild the launcher/dock icon layer\n"
     "  hook theme-set            Run by Omarchy after a theme switch\n"
+    "  hook post-update          Run by Omarchy after an update\n"
     "\n"
     "Every command takes --json.\n";
 
@@ -213,8 +214,9 @@ int Cli::run(const QStringList &rawArgs) {
         return 0;
     }
 
-    if (command == "hook" && args.value(1) == "theme-set") {
-        if (!backend.runThemeSetHook())
+    if (command == "hook" && (args.value(1) == "theme-set" || args.value(1) == "post-update")) {
+        const bool ok = args.value(1) == "theme-set" ? backend.runThemeSetHook() : backend.runPostUpdateHook();
+        if (!ok)
             return failure(backend.error(), json);
         if (json)
             print(QJsonDocument(status(backend)).toJson(QJsonDocument::Compact));

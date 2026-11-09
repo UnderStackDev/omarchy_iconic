@@ -1,6 +1,8 @@
 #pragma once
 
+#include <QJsonObject>
 #include <QObject>
+#include <QProcess>
 #include <QString>
 #include <QVariantList>
 #include <memory>
@@ -98,6 +100,13 @@ public:
 
     // What the Omarchy theme-set hook runs. Returns false on failure.
     bool runThemeSetHook();
+    // What the Omarchy post-update hook runs: launcher edits, then the theme.
+    bool runPostUpdateHook();
+    // Puts remembered launcher edits back where an update undid them.
+    // Returns how many launchers were fixed.
+    int reapplyAppEdits();
+    // Follows the desktop's icon theme live while the window is open.
+    void watchDesktop();
     // Keeps an existing hook pointing at this build (no hook is created).
     void refreshHook();
 
@@ -140,7 +149,11 @@ private:
     Snapshot snapshot(const QString &id) const;
     void restore(const Snapshot &snap);
     const DesktopEntries::Entry *findApp(const QString &id) const;
-    void afterAppChange();
+    void afterAppChange(const QString &id);
+    static QString appEditsPath();
+    void loadAppEdits();
+    void recordApp(const QString &id);
+    void seedAppEdits();
 
     DesktopSettings m_desktop;
     QString m_hookBinary;
@@ -159,6 +172,8 @@ private:
     QList<DesktopEntries::Entry> m_apps;
     QList<QPair<QString, Snapshot>> m_undo, m_redo;  // app id, state before
     bool m_asyncShellIcons = false;
+    QJsonObject m_appEdits;
+    QProcess *m_monitor = nullptr;
     bool m_shellIconsRunning = false;
     bool m_shellIconsAgain = false;
 };

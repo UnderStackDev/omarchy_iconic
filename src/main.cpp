@@ -32,7 +32,7 @@ int main(int argc, char *argv[]) {
 
     QGuiApplication app(argc, argv);
     app.setApplicationName("iconic");
-    app.setApplicationVersion("0.1.0");
+    app.setApplicationVersion("0.1.1");
 
     // Matches the window to iconic.desktop, so the compositor (Wayland app_id)
     // and the launcher pick up the installed icon.
@@ -60,6 +60,8 @@ int main(int argc, char *argv[]) {
     backend.updateShellIcons(true);
     Installer::cleanupStale();
     backend.refreshHook();
+    backend.reapplyAppEdits();  // also lists edits made before 0.1.1
+    backend.watchDesktop();
     QObject::connect(&backend, &Backend::themeApplied, &app, [](const QString &id) { QIcon::setThemeName(id); });
 
     QQmlApplicationEngine engine;

@@ -109,20 +109,35 @@ IconicConfig IconicConfig::load(const QString &file) {
     const QString text = QString::fromUtf8(in.readAll());
     static const QRegularExpression mode(R"re(^\s*mode\s*=\s*"(\w+)")re", QRegularExpression::MultilineOption);
     static const QRegularExpression theme(R"re(^\s*theme\s*=\s*"([^"]*)")re", QRegularExpression::MultilineOption);
+    static const QRegularExpression omarchy(R"re(^\s*omarchy_theme\s*=\s*"([^"]*)")re",
+                                            QRegularExpression::MultilineOption);
     config.lock = mode.match(text).captured(1) == "lock";
     config.theme = theme.match(text).captured(1);
+    config.omarchyTheme = omarchy.match(text).captured(1);
     return config;
 }
 
+QString IconicConfig::currentOmarchyTheme() {
+    QFile file(QDir::homePath() + "/.local/state/omarchy/current/theme.name");
+    if (!file.open(QIODevice::ReadOnly))
+        return {};
+    return QString::fromUtf8(file.readAll()).trimmed();
+}
+
 bool IconicConfig::save(const QString &file, QString *error) const {
-    QString text = "# Iconic settings. \"follow\" lets each Omarchy theme pick the icon theme;\n"
-                   "# \"lock\" keeps `theme` across Omarchy theme switches.\n";
+    QString text = "# Iconic settings. \"follow\" keeps `theme` until the Omarchy theme changes,\n"
+                   "# then lets the new Omarchy theme pick; \"lock\" keeps `theme` always.\n";
     text += QString("mode = \"%1\"\n").arg(lock ? "lock" : "follow");
     text += QString("theme = \"%1\"\n").arg(theme);
+    text += QString("omarchy_theme = \"%1\"\n").arg(omarchyTheme);
     return writeAtomically(file, text.toUtf8(), error);
 }
 
 DesktopSettings::DesktopSettings(const QString &gsettings) : m_gsettings(gsettings) {}
+
+QString DesktopSettings::program() const {
+    return m_gsettings;
+}
 
 QString DesktopSettings::parseGsettingsString(const QString &output) {
     QString value = output.trimmed();
@@ -185,34 +200,39 @@ bool DesktopSettings::syncFiles(const QString &theme, QString *error) const {
     return ok;
 }
 
-QString ThemeSetHook::path() {
-    return configHome() + "/omarchy/hooks/theme-set.d/iconic";
+QStringList ThemeSetHook::events() {
+    return {"theme-set", "post-update"};
 }
 
-QString ThemeSetHook::script(const QString &binary) {
+QString ThemeSetHook::path(const QString &event) {
+    return configHome() + "/omarchy/hooks/" + event + ".d/iconic";
+}
+
+QString ThemeSetHook::script(const QString &binary, const QString &event) {
     QString quoted = binary;
     quoted.replace('\'', "'\\''");
     return QString(
                "#!/bin/bash\n"
-               "# Installed by Iconic. After an Omarchy theme switch this keeps the icon\n"
-               "# theme you locked in Iconic, or (in Follow mode) copies Omarchy's pick to\n"
-               "# the GTK, KDE and Qt config files. Iconic rewrites this file when it moves.\n"
+               "# Installed by Iconic. Keeps the icon theme and launcher changes you made in\n"
+               "# Iconic when Omarchy switches theme or updates. Iconic rewrites this file.\n"
                "# The installed iconic wins; the path below is the build that wrote this.\n"
                "ICONIC=$(command -v iconic) || ICONIC='%1'\n"
                "[[ -x $ICONIC ]] || exit 0\n"
-               "exec \"$ICONIC\" hook theme-set\n")
-        .arg(quoted);
+               "exec \"$ICONIC\" hook %2\n")
+        .arg(quoted, event);
 }
 
 bool ThemeSetHook::ensure(const QString &binary, QString *error) {
-    const QByteArray wanted = script(binary).toUtf8();
-    QFile current(path());
-    if (current.open(QIODevice::ReadOnly) && current.readAll() == wanted)
-        return true;
-    current.close();
-    if (!writeAtomically(path(), wanted, error))
-        return false;
-    QFile::setPermissions(path(), QFile::ReadOwner | QFile::WriteOwner | QFile::ExeOwner | QFile::ReadGroup |
-                                      QFile::ReadOther);
+    for (const QString &event : events()) {
+        const QByteArray wanted = script(binary, event).toUtf8();
+        QFile current(path(event));
+        if (current.open(QIODevice::ReadOnly) && current.readAll() == wanted)
+            continue;
+        current.close();
+        if (!writeAtomically(path(event), wanted, error))
+            return false;
+        QFile::setPermissions(path(event), QFile::ReadOwner | QFile::WriteOwner | QFile::ExeOwner |
+                                               QFile::ReadGroup | QFile::ReadOther);
+    }
     return true;
 }

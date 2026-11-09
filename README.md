@@ -8,7 +8,9 @@ Iconic does three things, from one keyboard-driven window that follows your
 Omarchy theme:
 
 - **Themes** — pick the desktop's icon theme from previews of every installed
-  theme, and optionally keep it when you switch Omarchy themes.
+  theme. In **Follow** mode your pick stays until you switch to another Omarchy
+  theme, which then picks its own; with **Keep my choice** (Lock) it stays for
+  good. Either way it survives `omarchy update`.
 - **Install** — drop an icon theme archive or folder onto the window. It lands
   in `~/.local/share/icons`, where Flatpak apps can see it too.
 - **Apps** — rename a launcher, give it another icon, or hide it, without
@@ -87,8 +89,10 @@ iconic shell-icons        # rebuild the launcher icon layer
 |---|---|
 | gsettings `org.gnome.desktop.interface icon-theme` | the icon theme (GTK apps, and Flatpak apps through the settings portal) |
 | `~/.config/gtk-3.0/settings.ini`, `gtk-4.0/settings.ini`, `kdeglobals`, `qt5ct`/`qt6ct` (if present) | the same theme name, one key each, everything else kept |
-| `~/.config/omarchy/hooks/theme-set.d/iconic` | runs after an Omarchy theme switch: keeps your theme (Lock) or copies Omarchy's pick to the files above (Follow) |
-| `~/.config/iconic/config.toml` | Follow or Lock, and the locked theme |
+| `~/.config/omarchy/hooks/theme-set.d/iconic` | runs after an Omarchy theme switch or refresh: keeps your theme (Lock, or Follow while the Omarchy theme is the same), or takes the new Omarchy theme's pick and copies it to the files above |
+| `~/.config/omarchy/hooks/post-update.d/iconic` | runs after `omarchy update`: puts back launcher changes that the update re-copied, rebuilds changed packages' launchers with your changes, then the theme as above |
+| `~/.config/iconic/config.toml` | Follow or Lock, your theme, and the Omarchy theme it was picked under |
+| `~/.config/iconic/apps.json` | your launcher changes, so they can be put back after updates |
 | `~/.icons/iconic-apps/` | the launcher icon layer |
 | `~/.local/share/icons/` | themes you install |
 | `~/.local/share/applications/` | launcher changes: a copy marked `X-Iconic-Override=true` for system and Flatpak apps; your own launchers are edited in place after a backup in `~/.local/share/iconic/backups/` |
@@ -102,7 +106,8 @@ installed.
 
 ```sh
 sudo pacman -R iconic
-rm -rf ~/.icons/iconic-apps ~/.config/iconic ~/.config/omarchy/hooks/theme-set.d/iconic
+rm -rf ~/.icons/iconic-apps ~/.config/iconic \
+       ~/.config/omarchy/hooks/theme-set.d/iconic ~/.config/omarchy/hooks/post-update.d/iconic
 ```
 
 Launcher changes stay until you reset them (or delete the files marked

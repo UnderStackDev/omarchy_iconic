@@ -6,6 +6,8 @@
 #include <QFileInfo>
 #include <QStandardPaths>
 #include <QFutureWatcher>
+#include <QJsonDocument>
+#include <QJsonObject>
 #include <QSaveFile>
 #include <QSet>
 #include <QUrl>
@@ -52,6 +54,7 @@ void Backend::refresh() {
         m_iconThemes->clearCache();
     m_themes = m_iconThemes->scan();
     m_config = IconicConfig::load();
+    loadAppEdits();
     QString e;
     m_currentTheme = m_desktop.currentTheme(&e);
     if (!e.isEmpty())
@@ -99,11 +102,11 @@ bool Backend::applyTheme(const QString &id) {
     if (!m_desktop.apply(id, &e))
         return fail(e);
     m_currentTheme = id;
-    if (m_config.lock) {
-        m_config.theme = id;
-        if (!m_config.save(IconicConfig::path(), &e))
-            return fail(e);
-    }
+    // Remembered in both modes: Follow keeps it until the Omarchy theme changes.
+    m_config.theme = id;
+    m_config.omarchyTheme = IconicConfig::currentOmarchyTheme();
+    if (!m_config.save(IconicConfig::path(), &e))
+        return fail(e);
     ensureHook();
     updateShellIcons();
     emit changed();
@@ -112,9 +115,16 @@ bool Backend::applyTheme(const QString &id) {
 }
 
 bool Backend::setLock(bool lock) {
+    // Lock what the desktop shows right now, not what this window last saw:
+    // the Omarchy theme may have changed while Iconic was open.
+    const QString live = m_desktop.currentTheme();
+    if (!live.isEmpty())
+        m_currentTheme = live;
     m_config.lock = lock;
-    if (lock)
+    if (lock) {
         m_config.theme = m_currentTheme;
+        m_config.omarchyTheme = IconicConfig::currentOmarchyTheme();
+    }
     QString e;
     if (!m_config.save(IconicConfig::path(), &e))
         return fail(e);
@@ -189,23 +199,42 @@ bool Backend::removeTheme(const QString &id) {
 
 bool Backend::runThemeSetHook() {
     QString e;
-    if (m_config.lock && !m_config.theme.isEmpty()) {
-        if (installed(m_config.theme)) {
-            if (!m_desktop.apply(m_config.theme, &e))
-                return fail(e);
-            m_currentTheme = m_config.theme;
-            return updateShellIcons();
-        }
-        // The locked theme was uninstalled; let Omarchy's pick stand.
-        fail(tr("Locked icon theme \"%1\" is not installed; following Omarchy").arg(m_config.theme));
+    const QString omarchy = IconicConfig::currentOmarchyTheme();
+    const bool picked = !m_config.theme.isEmpty() && installed(m_config.theme);
+    // Lock: always the pick. Follow: the pick until the Omarchy theme really
+    // changes; an update or refresh re-running the same theme keeps it.
+    const bool keep = picked && (m_config.lock || m_config.omarchyTheme == omarchy);
+    if (keep) {
+        const bool ok = m_currentTheme != m_config.theme ? m_desktop.apply(m_config.theme, &e)
+                                                         : m_desktop.syncFiles(m_config.theme, &e);
+        if (!ok)
+            return fail(e);
+        m_currentTheme = m_config.theme;
+        ensureHook();
+        return updateShellIcons();
     }
+    if (m_config.lock && !m_config.theme.isEmpty())
+        fail(tr("Locked icon theme \"%1\" is not installed; following Omarchy").arg(m_config.theme));
     if (m_currentTheme.isEmpty())
         return false;
+    // A new Omarchy theme: its icon theme becomes the pick to keep from now on.
+    if (!m_config.lock) {
+        m_config.theme = m_currentTheme;
+        m_config.omarchyTheme = omarchy;
+        m_config.save(IconicConfig::path(), &e);
+    }
     if (!m_desktop.syncFiles(m_currentTheme, &e))
         return fail(e);
+    ensureHook();
     if (!updateShellIcons())
         return false;
     return m_error.isEmpty();
+}
+
+bool Backend::runPostUpdateHook() {
+    // Migrations can re-copy Omarchy's launchers and re-run the theme.
+    reapplyAppEdits();
+    return runThemeSetHook();
 }
 
 bool Backend::updateShellIcons(bool onlyIfStale) {
@@ -490,9 +519,104 @@ void Backend::restore(const Snapshot &snap) {
         QFile::remove(path);
 }
 
-void Backend::afterAppChange() {
+QString Backend::appEditsPath() {
+    return QFileInfo(IconicConfig::path()).absolutePath() + "/apps.json";
+}
+
+void Backend::loadAppEdits() {
+    QFile file(appEditsPath());
+    m_appEdits = file.open(QIODevice::ReadOnly) ? QJsonDocument::fromJson(file.readAll()).object() : QJsonObject();
+}
+
+void Backend::seedAppEdits() {
+    // Versions before 0.1.1 didn't keep this list; build it once from the
+    // launchers Iconic has already changed.
+    if (QFile::exists(appEditsPath()))
+        return;
+    for (const DesktopEntries::Entry &e : m_apps)
+        if (e.modified())
+            recordApp(e.id);
+    if (!QFile::exists(appEditsPath()))
+        recordApp(QString());  // writes an empty list, so this runs only once
+}
+
+// Remembers what differs from the original for `id`, so the change can be
+// put back after Omarchy or a package rewrites the launcher.
+void Backend::recordApp(const QString &id) {
+    QJsonObject edit;
+    if (const auto *e = findApp(id); e && e->modified()) {
+        if (e->name != e->originalName)
+            edit["name"] = e->name;
+        if (e->icon != e->originalIcon)
+            edit["icon"] = e->icon;
+        if (e->noDisplay != e->originalNoDisplay)
+            edit["hidden"] = e->noDisplay;
+    }
+    if (edit.isEmpty())
+        m_appEdits.remove(id);
+    else
+        m_appEdits[id] = edit;
+    QDir().mkpath(QFileInfo(appEditsPath()).absolutePath());
+    QSaveFile out(appEditsPath());
+    if (out.open(QIODevice::WriteOnly)) {
+        out.write(QJsonDocument(m_appEdits).toJson(QJsonDocument::Indented));
+        out.commit();
+    }
+}
+
+int Backend::reapplyAppEdits() {
+    loadAppEdits();
+    refreshApps();
+    seedAppEdits();
+    int fixed = 0;
+    for (auto it = m_appEdits.constBegin(); it != m_appEdits.constEnd(); ++it) {
+        const DesktopEntries::Entry *entry = findApp(it.key());
+        if (!entry)
+            continue;  // uninstalled for now; the edit waits
+        const QJsonObject want = it.value().toObject();
+        const QString name = want.value("name").toString(entry->name);
+        const QString icon = want.value("icon").toString(entry->icon);
+        const bool hidden = want.value("hidden").toBool(entry->noDisplay);
+        const bool drifted = name != entry->name || icon != entry->icon || hidden != entry->noDisplay;
+        // A package update leaves our copy on the old launcher (old Exec,
+        // actions); rebuild it from the new original.
+        const bool stale = entry->override && !entry->originalPath.isEmpty() &&
+                           QFileInfo(entry->originalPath).lastModified() > QFileInfo(entry->path).lastModified();
+        if (!drifted && !stale)
+            continue;
+        if (stale)
+            QFile::remove(entry->path);
+        else if (entry->backedUp)
+            // Omarchy re-copied its own launcher: that copy is the new original.
+            QFile::remove(entry->originalPath);
+        refreshApps();
+        const DesktopEntries::Entry *fresh = findApp(it.key());
+        if (!fresh)
+            continue;
+        DesktopEntries::Change change;
+        if (want.contains("name"))
+            change.name = name;
+        if (want.contains("icon"))
+            change.icon = icon;
+        if (want.contains("hidden"))
+            change.noDisplay = hidden ? 1 : 0;
+        QString e;
+        if (DesktopEntries::apply(*fresh, change, &e).isEmpty())
+            fail(e);
+        else
+            ++fixed;
+    }
+    if (fixed > 0) {
+        DesktopEntries::refreshDatabase();
+        refreshApps();
+    }
+    return fixed;
+}
+
+void Backend::afterAppChange(const QString &id) {
     DesktopEntries::refreshDatabase();
     refreshApps();
+    recordApp(id);
     updateShellIcons();
 }
 
@@ -520,7 +644,7 @@ bool Backend::saveApp(const QString &id, const QString &name, const QString &ico
     }
     m_undo << qMakePair(id, before);
     m_redo.clear();
-    afterAppChange();
+    afterAppChange(id);
     return true;
 }
 
@@ -534,7 +658,7 @@ bool Backend::resetApp(const QString &id) {
         return fail(e);
     m_undo << qMakePair(id, before);
     m_redo.clear();
-    afterAppChange();
+    afterAppChange(id);
     return true;
 }
 
@@ -544,7 +668,7 @@ void Backend::undo() {
     const auto step = m_undo.takeLast();
     m_redo << qMakePair(step.first, snapshot(step.first));
     restore(step.second);
-    afterAppChange();
+    afterAppChange(step.first);
 }
 
 void Backend::redo() {
@@ -553,7 +677,7 @@ void Backend::redo() {
     const auto step = m_redo.takeLast();
     m_undo << qMakePair(step.first, snapshot(step.first));
     restore(step.second);
-    afterAppChange();
+    afterAppChange(step.first);
 }
 
 QString Backend::importIcon(const QString &pathOrUrl, const QString &id) {
@@ -577,4 +701,30 @@ QStringList Backend::themeIconNames(const QString &query, int limit) {
             break;
     }
     return out;
+}
+
+void Backend::watchDesktop() {
+    // `gsettings monitor` prints a line whenever the icon theme changes, from
+    // anywhere: an Omarchy theme switch, the hook, another tool.
+    if (m_monitor)
+        return;
+    m_monitor = new QProcess(this);
+    connect(m_monitor, &QProcess::readyReadStandardOutput, this, [this] {
+        while (m_monitor->canReadLine()) {
+            const QString line = QString::fromUtf8(m_monitor->readLine()).trimmed();
+            const int colon = line.indexOf(':');
+            if (colon < 0)
+                continue;
+            const QString theme = DesktopSettings::parseGsettingsString(line.mid(colon + 1));
+            m_config = IconicConfig::load();
+            if (theme.isEmpty() || theme == m_currentTheme) {
+                emit changed();
+                continue;
+            }
+            m_currentTheme = theme;
+            emit changed();
+            emit themeApplied(theme);
+        }
+    });
+    m_monitor->start(m_desktop.program(), {"monitor", "org.gnome.desktop.interface", "icon-theme"});
 }
