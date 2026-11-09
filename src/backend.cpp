@@ -84,7 +84,7 @@ void Backend::clearError() {
 }
 
 void Backend::refreshHook() {
-    if (QFile::exists(ThemeSetHook::path()))
+    if (QFile::exists(ThemeSetHook::path()) || ThemeSetHook::hasLegacy())
         ensureHook();
 }
 

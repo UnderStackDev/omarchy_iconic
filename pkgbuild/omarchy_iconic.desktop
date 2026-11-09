@@ -2,8 +2,8 @@
 Type=Application
 Name=Iconic
 Comment=Icon themes and app launchers for Omarchy
-Exec=iconic
-Icon=iconic
+Exec=omarchy_iconic
+Icon=omarchy_iconic
 Terminal=false
 Categories=Settings;DesktopSettings;
-StartupWMClass=iconic
+StartupWMClass=omarchy_iconic

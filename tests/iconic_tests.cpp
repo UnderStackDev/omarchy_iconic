@@ -132,6 +132,32 @@ private slots:
         QVERIFY(script.contains("hook theme-set"));
     }
 
+    void ensureRemovesOnlyOurLegacyHooks()
+    {
+        const QString ours = ThemeSetHook::legacyPath("theme-set");
+        const QString other = ThemeSetHook::legacyPath("post-update");
+        QDir().mkpath(QFileInfo(ours).absolutePath());
+        QDir().mkpath(QFileInfo(other).absolutePath());
+        QFile a(ours);
+        QVERIFY(a.open(QIODevice::WriteOnly));
+        a.write(ThemeSetHook::script("/usr/bin/iconic").replace("omarchy_iconic", "iconic").toUtf8());
+        a.close();
+        QFile b(other);
+        QVERIFY(b.open(QIODevice::WriteOnly));
+        b.write("#!/bin/bash\necho someone else's hook\n");
+        b.close();
+        QVERIFY(ThemeSetHook::hasLegacy());
+        QVERIFY(ThemeSetHook::ensure("/usr/bin/omarchy_iconic"));
+        QVERIFY(!QFile::exists(ours));
+        QVERIFY(QFile::exists(other));
+        QVERIFY(!ThemeSetHook::hasLegacy());
+        QVERIFY(QFile::exists(ThemeSetHook::path("theme-set")));
+        QFile hook(ThemeSetHook::path("post-update"));
+        QVERIFY(hook.open(QIODevice::ReadOnly));
+        QVERIFY(hook.readAll().contains("command -v omarchy_iconic"));
+        QFile::remove(other);
+    }
+
     void applyWritesEveryMirror()
     {
         DesktopSettings desktop(m_gsettings);
@@ -150,7 +176,7 @@ private slots:
     {
         const QString omarchy = m_home.path() + "/.local/state/omarchy/current/theme.name";
         write(omarchy, "tokyo-night\n");
-        Backend backend(nullptr, m_gsettings, "/usr/bin/iconic");
+        Backend backend(nullptr, m_gsettings, "/usr/bin/omarchy_iconic");
         QVERIFY(backend.applyTheme("Plain"));
         QVERIFY(backend.setLock(true));
         QCOMPARE(backend.lockedTheme(), QString("Plain"));
@@ -162,7 +188,7 @@ private slots:
         // Omarchy switches theme and sets its own icon theme in gsettings.
         write(omarchy, "catppuccin\n");
         write(m_home.path() + "/gsettings.value", "Child");
-        Backend hook(nullptr, m_gsettings, "/usr/bin/iconic");
+        Backend hook(nullptr, m_gsettings, "/usr/bin/omarchy_iconic");
         QVERIFY(hook.runThemeSetHook());
         QCOMPARE(DesktopSettings(m_gsettings).currentTheme(), QString("Plain"));
 
@@ -170,7 +196,7 @@ private slots:
         QVERIFY(hook.setLock(false));
         write(omarchy, "rose-pine\n");
         write(m_home.path() + "/gsettings.value", "Child");
-        Backend follow(nullptr, m_gsettings, "/usr/bin/iconic");
+        Backend follow(nullptr, m_gsettings, "/usr/bin/omarchy_iconic");
         QVERIFY(follow.runThemeSetHook());
         QCOMPARE(DesktopSettings(m_gsettings).currentTheme(), QString("Child"));
         QCOMPARE(IniFile::value(m_home.path() + "/.config/kdeglobals", "Icons", "Theme"), QString("Child"));
@@ -182,21 +208,21 @@ private slots:
     {
         const QString omarchy = m_home.path() + "/.local/state/omarchy/current/theme.name";
         write(omarchy, "nord\n");
-        Backend backend(nullptr, m_gsettings, "/usr/bin/iconic");
+        Backend backend(nullptr, m_gsettings, "/usr/bin/omarchy_iconic");
         QVERIFY(backend.setLock(false));
         QVERIFY(backend.applyTheme("Plain"));
 
         // `omarchy update` runs a migration with omarchy-theme-refresh: the
         // same Omarchy theme is set again and its icon theme lands in gsettings.
         write(m_home.path() + "/gsettings.value", "Child");
-        Backend update(nullptr, m_gsettings, "/usr/bin/iconic");
+        Backend update(nullptr, m_gsettings, "/usr/bin/omarchy_iconic");
         QVERIFY(update.runPostUpdateHook());
         QCOMPARE(DesktopSettings(m_gsettings).currentTheme(), QString("Plain"));
 
         // Only a real Omarchy theme change lets Omarchy pick again.
         write(omarchy, "gruvbox\n");
         write(m_home.path() + "/gsettings.value", "Child");
-        Backend switched(nullptr, m_gsettings, "/usr/bin/iconic");
+        Backend switched(nullptr, m_gsettings, "/usr/bin/omarchy_iconic");
         QVERIFY(switched.runThemeSetHook());
         QCOMPARE(DesktopSettings(m_gsettings).currentTheme(), QString("Child"));
     }
@@ -204,7 +230,7 @@ private slots:
     void lockTakesTheLiveThemeNotAStaleOne()
     {
         write(m_home.path() + "/gsettings.value", "Plain");
-        Backend backend(nullptr, m_gsettings, "/usr/bin/iconic");
+        Backend backend(nullptr, m_gsettings, "/usr/bin/omarchy_iconic");
         // The Omarchy theme changes while the window is open.
         write(m_home.path() + "/gsettings.value", "Child");
         QVERIFY(backend.setLock(true));
@@ -220,7 +246,7 @@ private slots:
         write(h + "/system/applications/old.desktop", "[Desktop Entry]\nType=Application\nName=Old\nIcon=old\n");
         write(user + "/old.desktop", "[Desktop Entry]\nType=Application\nName=Renamed\nIcon=old\nX-Iconic-Override=true\n");
         QFile::remove(h + "/.config/iconic/apps.json");
-        Backend backend(nullptr, m_gsettings, "/usr/bin/iconic");
+        Backend backend(nullptr, m_gsettings, "/usr/bin/omarchy_iconic");
         QCOMPARE(backend.reapplyAppEdits(), 0);
         QVERIFY(read(h + "/.config/iconic/apps.json").contains("Renamed"));
         QFile::remove(user + "/old.desktop");
@@ -235,7 +261,7 @@ private slots:
         // An Omarchy-shipped web app lives in the user folder.
         write(user + "/Chat.desktop", "[Desktop Entry]\nType=Application\nName=Chat\nIcon=chat\nExec=omarchy-launch-webapp https://chat\n");
         write(h + "/system/applications/viewer.desktop", "[Desktop Entry]\nType=Application\nName=Viewer\nIcon=viewer\nExec=viewer-1\n");
-        Backend backend(nullptr, m_gsettings, "/usr/bin/iconic");
+        Backend backend(nullptr, m_gsettings, "/usr/bin/omarchy_iconic");
         QVERIFY(backend.saveApp("Chat", "Messages", "", false));
         QVERIFY(backend.saveApp("viewer", "Pictures", "image-viewer", false));
         QVERIFY(read(h + "/.config/iconic/apps.json").contains("Messages"));
@@ -250,7 +276,7 @@ private slots:
         }
         write(h + "/system/applications/viewer.desktop", "[Desktop Entry]\nType=Application\nName=Viewer\nIcon=viewer\nExec=viewer-2\n");
 
-        Backend update(nullptr, m_gsettings, "/usr/bin/iconic");
+        Backend update(nullptr, m_gsettings, "/usr/bin/omarchy_iconic");
         QCOMPARE(update.reapplyAppEdits(), 2);
         QCOMPARE(DesktopEntries::value(user + "/Chat.desktop", "Name"), QString("Messages"));
         QCOMPARE(DesktopEntries::value(user + "/Chat.desktop", "Exec"), QString("omarchy-launch-webapp https://chat2"));
@@ -273,7 +299,7 @@ private slots:
     void onlyUnusedUserThemesCanBeRemoved()
     {
         write(m_home.path() + "/gsettings.value", "Plain");
-        Backend backend(nullptr, m_gsettings, "/usr/bin/iconic");
+        Backend backend(nullptr, m_gsettings, "/usr/bin/omarchy_iconic");
         QVERIFY(!backend.canRemove("Plain"));   // system and active
         QVERIFY(backend.canRemove("Child"));    // the user copy
         QVERIFY(backend.removeTheme("Child"));
@@ -429,7 +455,7 @@ private slots:
     {
         const QString h = m_home.path();
         write(h + "/drop/Dropped/index.theme", "[Icon Theme]\nName=Dropped\nDirectories=16/apps\n\n[16/apps]\nSize=16\n");
-        Backend backend(nullptr, m_gsettings, "/usr/bin/iconic");
+        Backend backend(nullptr, m_gsettings, "/usr/bin/omarchy_iconic");
         backend.installPaths({QUrl::fromLocalFile(h + "/drop/Dropped").toString()});
         QTRY_VERIFY(!backend.busy());
         QCOMPARE(backend.lastInstalled(), QStringList({"Dropped"}));
@@ -542,7 +568,7 @@ private slots:
     {
         const QString h = m_home.path();
         write(h + "/system/applications/editor.desktop", "[Desktop Entry]\nType=Application\nName=Editor\nIcon=editor\n");
-        Backend backend(nullptr, m_gsettings, "/usr/bin/iconic");
+        Backend backend(nullptr, m_gsettings, "/usr/bin/omarchy_iconic");
         const QString copy = h + "/.local/share/applications/editor.desktop";
 
         QVERIFY(backend.saveApp("editor", "Editor", "editor", false));  // nothing changed

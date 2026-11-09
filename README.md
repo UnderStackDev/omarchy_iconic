@@ -43,6 +43,14 @@ bin/install          # builds and installs the package (makepkg -fsi)
 
 Then open **Iconic** from the app launcher (`Super + Space`).
 
+The package and command are called `omarchy_iconic`. Before 0.2.0 they were
+called `iconic`, which is also the name of an unrelated GNOME app in the AUR,
+so `omarchy update` replaced this app with that one
+([#2](https://github.com/UnderStackDev/omarchy_iconic/issues/2)). Installing
+0.2.0 removes an old `iconic` 0.x package and its hooks and keeps your
+settings. If the update already put the GNOME app in its place and you don't
+want it, remove it with `sudo pacman -R iconic`.
+
 Needs `qt6-base`, `qt6-declarative`, `qt6-wayland`, `qt6-svg`,
 `xdg-desktop-portal`, `libarchive` (bsdtar), `gtk-update-icon-cache` and
 `desktop-file-utils`; Omarchy has them all.
@@ -72,15 +80,15 @@ Everything also works without the window. Every command takes `--json` and
 exits 0 or 1.
 
 ```sh
-iconic status
-iconic list-themes
-iconic apply Papirus-Dark [--lock|--follow]
-iconic lock | follow
-iconic install ~/Downloads/theme.tar.xz [--replace|--keep-both] [--apply]
-iconic app list [--modified|--hidden]
-iconic app set firefox --name "Web" --icon web-browser [--hide|--show]
-iconic app reset firefox
-iconic shell-icons        # rebuild the launcher icon layer
+omarchy_iconic status
+omarchy_iconic list-themes
+omarchy_iconic apply Papirus-Dark [--lock|--follow]
+omarchy_iconic lock | follow
+omarchy_iconic install ~/Downloads/theme.tar.xz [--replace|--keep-both] [--apply]
+omarchy_iconic app list [--modified|--hidden]
+omarchy_iconic app set firefox --name "Web" --icon web-browser [--hide|--show]
+omarchy_iconic app reset firefox
+omarchy_iconic shell-icons        # rebuild the launcher icon layer
 ```
 
 ## What it changes
@@ -89,8 +97,8 @@ iconic shell-icons        # rebuild the launcher icon layer
 |---|---|
 | gsettings `org.gnome.desktop.interface icon-theme` | the icon theme (GTK apps, and Flatpak apps through the settings portal) |
 | `~/.config/gtk-3.0/settings.ini`, `gtk-4.0/settings.ini`, `kdeglobals`, `qt5ct`/`qt6ct` (if present) | the same theme name, one key each, everything else kept |
-| `~/.config/omarchy/hooks/theme-set.d/iconic` | runs after an Omarchy theme switch or refresh: keeps your theme (Lock, or Follow while the Omarchy theme is the same), or takes the new Omarchy theme's pick and copies it to the files above |
-| `~/.config/omarchy/hooks/post-update.d/iconic` | runs after `omarchy update`: puts back launcher changes that the update re-copied, rebuilds changed packages' launchers with your changes, then the theme as above |
+| `~/.config/omarchy/hooks/theme-set.d/omarchy_iconic` | runs after an Omarchy theme switch or refresh: keeps your theme (Lock, or Follow while the Omarchy theme is the same), or takes the new Omarchy theme's pick and copies it to the files above |
+| `~/.config/omarchy/hooks/post-update.d/omarchy_iconic` | runs after `omarchy update`: puts back launcher changes that the update re-copied, rebuilds changed packages' launchers with your changes, then the theme as above |
 | `~/.config/iconic/config.toml` | Follow or Lock, your theme, and the Omarchy theme it was picked under |
 | `~/.config/iconic/apps.json` | your launcher changes, so they can be put back after updates |
 | `~/.icons/iconic-apps/` | the launcher icon layer |
@@ -105,9 +113,9 @@ installed.
 ## Uninstall
 
 ```sh
-sudo pacman -R iconic
+sudo pacman -R omarchy_iconic
 rm -rf ~/.icons/iconic-apps ~/.config/iconic \
-       ~/.config/omarchy/hooks/theme-set.d/iconic ~/.config/omarchy/hooks/post-update.d/iconic
+       ~/.config/omarchy/hooks/theme-set.d/omarchy_iconic ~/.config/omarchy/hooks/post-update.d/omarchy_iconic
 ```
 
 Launcher changes stay until you reset them (or delete the files marked
@@ -116,7 +124,7 @@ Launcher changes stay until you reset them (or delete the files marked
 ## Build and test
 
 ```sh
-bin/build && build/iconic
+bin/build && build/omarchy_iconic
 bin/test
 ```
 

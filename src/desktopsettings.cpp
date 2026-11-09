@@ -205,7 +205,20 @@ QStringList ThemeSetHook::events() {
 }
 
 QString ThemeSetHook::path(const QString &event) {
+    return configHome() + "/omarchy/hooks/" + event + ".d/omarchy_iconic";
+}
+
+QString ThemeSetHook::legacyPath(const QString &event) {
     return configHome() + "/omarchy/hooks/" + event + ".d/iconic";
+}
+
+bool ThemeSetHook::hasLegacy() {
+    for (const QString &event : events()) {
+        QFile file(legacyPath(event));
+        if (file.open(QIODevice::ReadOnly) && file.readAll().contains("# Installed by Iconic."))
+            return true;
+    }
+    return false;
 }
 
 QString ThemeSetHook::script(const QString &binary, const QString &event) {
@@ -215,8 +228,8 @@ QString ThemeSetHook::script(const QString &binary, const QString &event) {
                "#!/bin/bash\n"
                "# Installed by Iconic. Keeps the icon theme and launcher changes you made in\n"
                "# Iconic when Omarchy switches theme or updates. Iconic rewrites this file.\n"
-               "# The installed iconic wins; the path below is the build that wrote this.\n"
-               "ICONIC=$(command -v iconic) || ICONIC='%1'\n"
+               "# The installed omarchy_iconic wins; the path below is the build that wrote this.\n"
+               "ICONIC=$(command -v omarchy_iconic) || ICONIC='%1'\n"
                "[[ -x $ICONIC ]] || exit 0\n"
                "exec \"$ICONIC\" hook %2\n")
         .arg(quoted, event);
@@ -224,6 +237,13 @@ QString ThemeSetHook::script(const QString &binary, const QString &event) {
 
 bool ThemeSetHook::ensure(const QString &binary, QString *error) {
     for (const QString &event : events()) {
+        // Before 0.2 the hooks were called "iconic" and ran `iconic`, which is
+        // also the name of an unrelated AUR app. Only our own file is removed.
+        QFile legacy(legacyPath(event));
+        if (legacy.open(QIODevice::ReadOnly) && legacy.readAll().contains("# Installed by Iconic.")) {
+            legacy.close();
+            legacy.remove();
+        }
         const QByteArray wanted = script(binary, event).toUtf8();
         QFile current(path(event));
         if (current.open(QIODevice::ReadOnly) && current.readAll() == wanted)

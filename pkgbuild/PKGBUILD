@@ -1,10 +1,13 @@
-pkgname=iconic
-pkgver=0.1.1
+pkgname=omarchy_iconic
+pkgver=0.2.0
 pkgrel=1
 pkgdesc='Icon themes and app launchers for Omarchy'
 arch=('x86_64' 'aarch64')
 license=('MIT')
 depends=('qt6-base' 'qt6-declarative' 'qt6-wayland' 'qt6-svg' 'xdg-desktop-portal' 'glib2' 'gtk-update-icon-cache' 'desktop-file-utils' 'libarchive')
+# 0.1.x was packaged as "iconic", the name of an unrelated AUR app, so
+# AUR helpers replaced it on update. Installing this removes the old package.
+conflicts=('iconic<1')
 makedepends=('gcc' 'make')
 source=()
 sha256sums=()
@@ -16,8 +19,8 @@ build() {
 
 package() {
   cd "$startdir/.."
-  install -Dm755 build/iconic "$pkgdir/usr/bin/iconic"
+  install -Dm755 build/omarchy_iconic "$pkgdir/usr/bin/omarchy_iconic"
   install -Dm644 LICENSE "$pkgdir/usr/share/licenses/$pkgname/LICENSE"
-  install -Dm644 "$startdir/iconic.svg" "$pkgdir/usr/share/icons/hicolor/scalable/apps/iconic.svg"
-  install -Dm644 "$startdir/iconic.desktop" "$pkgdir/usr/share/applications/iconic.desktop"
+  install -Dm644 "$startdir/omarchy_iconic.svg" "$pkgdir/usr/share/icons/hicolor/scalable/apps/omarchy_iconic.svg"
+  install -Dm644 "$startdir/omarchy_iconic.desktop" "$pkgdir/usr/share/applications/omarchy_iconic.desktop"
 }

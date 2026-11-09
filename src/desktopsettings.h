@@ -61,7 +61,11 @@ namespace ThemeSetHook {
 QStringList events();
 QString path(const QString &event = "theme-set");
 QString script(const QString &binary, const QString &event = "theme-set");
-// Writes every hook for this binary, only where it differs. Returns false
+// Where hooks were before the rename to omarchy_iconic (0.1.x).
+QString legacyPath(const QString &event);
+bool hasLegacy();
+// Writes every hook for this binary, only where it differs, and removes
+// the 0.1.x ones. Returns false
 // and sets `error` when one can't be written.
 bool ensure(const QString &binary, QString *error = nullptr);
 }

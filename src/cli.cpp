@@ -10,7 +10,7 @@
 #include "backend.h"
 
 static const char *usage =
-    "Usage: iconic [command]\n"
+    "Usage: omarchy_iconic [command]\n"
     "\n"
     "  (no command), open        Open the window\n"
     "  status                    Show the icon theme and the Follow/Lock mode\n"
@@ -43,7 +43,7 @@ static int failure(const QString &message, bool json) {
     if (json)
         QTextStream(stdout) << QJsonDocument(QJsonObject{{"ok", false}, {"error", message}}).toJson(QJsonDocument::Compact)
                             << Qt::endl;
-    QTextStream(stderr) << "iconic: " << message << Qt::endl;
+    QTextStream(stderr) << "omarchy_iconic: " << message << Qt::endl;
     return 1;
 }
 
@@ -92,7 +92,7 @@ int Cli::run(const QStringList &rawArgs) {
     if (command == "apply") {
         const QString theme = args.value(1);
         if (theme.isEmpty() || theme.startsWith("--"))
-            return failure("apply needs a theme name (see iconic list-themes)", json);
+            return failure("apply needs a theme name (see omarchy_iconic list-themes)", json);
         if (args.contains("--lock") && args.contains("--follow"))
             return failure("use either --lock or --follow", json);
         if (args.contains("--follow") && !backend.setLock(false))
@@ -178,7 +178,7 @@ int Cli::run(const QStringList &rawArgs) {
             if (e.id == id || e.id == QString(id).remove(".desktop"))
                 entry = &e;
         if (!entry)
-            return failure(QString("no launcher with id \"%1\" (see iconic app list)").arg(id), json);
+            return failure(QString("no launcher with id \"%1\" (see omarchy_iconic app list)").arg(id), json);
         const QString realId = entry->id;
         if (sub == "set") {
             QString icon = option("--icon");

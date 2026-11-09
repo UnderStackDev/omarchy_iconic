@@ -1,4 +1,4 @@
-// iconic — icon themes and app launchers for Omarchy.
+// omarchy_iconic — icon themes and app launchers for Omarchy.
 
 #include <QCoreApplication>
 #include <QGuiApplication>
@@ -26,23 +26,23 @@ int main(int argc, char *argv[]) {
     // batch), so they never start the GUI side of Qt.
     if (Cli::wantsCli(args)) {
         QCoreApplication app(argc, argv);
-        app.setApplicationName("iconic");
+        app.setApplicationName("omarchy_iconic");
         return Cli::run(args);
     }
 
     QGuiApplication app(argc, argv);
-    app.setApplicationName("iconic");
-    app.setApplicationVersion("0.1.1");
+    app.setApplicationName("omarchy_iconic");
+    app.setApplicationVersion("0.2.0");
 
-    // Matches the window to iconic.desktop, so the compositor (Wayland app_id)
+    // Matches the window to omarchy_iconic.desktop, so the compositor (Wayland app_id)
     // and the launcher pick up the installed icon.
-    app.setDesktopFileName("iconic");
+    app.setDesktopFileName("omarchy_iconic");
 
     // Qt on Hyprland has no desktop platform theme to tell it where icon
     // themes live or which one is active, so give it the XDG folders and
     // take the theme from gsettings like GTK and Flatpak apps do.
     QIcon::setThemeSearchPaths(Backend::iconSearchPaths());
-    app.setWindowIcon(QIcon::fromTheme("iconic"));
+    app.setWindowIcon(QIcon::fromTheme("omarchy_iconic"));
 
     QQuickStyle::setStyle("Material");
 
