@@ -1,83 +1,110 @@
 # Iconic
 
-Icon themes and app launchers for [Omarchy](https://omarchy.org).
+Change your icon theme and tidy up your app launcher in
+[Omarchy](https://omarchy.org).
 
-![Iconic picking an icon theme](docs/screenshot.png)
+Iconic shows every icon theme you have side by side, so you can see what they
+look like before you pick one. It also lets you rename apps, give them a
+different icon, or hide the ones you never use. Nothing you change touches
+the apps themselves, and every change can be undone.
 
-Iconic does three things, from one keyboard-driven window that follows your
-Omarchy theme:
+It's built like Omarchy's own apps, follows your Omarchy theme, and works
+with the keyboard alone.
 
-- **Themes** — pick the desktop's icon theme from previews of every installed
-  theme. In **Follow** mode your pick stays until you switch to another Omarchy
-  theme, which then picks its own; with **Keep my choice** (Lock) it stays for
-  good. Either way it survives `omarchy update`.
-- **Install** — drop an icon theme archive or folder onto the window. It lands
-  in `~/.local/share/icons`, where Flatpak apps can see it too.
-- **Apps** — rename a launcher, give it another icon, or hide it, without
-  touching the package's own files.
+![Every installed icon theme, side by side](docs/themes.png)
 
-## Why app icons finally follow the theme
+## Pick an icon theme
 
-Omarchy's launcher and dock don't look app icons up in the active icon theme.
-They index every app icon from every installed theme and keep the first file
-they find per name, SVGs before PNGs. So switching the icon theme usually
-changes folders but not apps, and PNG themes such as Yaru never show up in the
-launcher at all.
+Open **Themes** and pick the one you like with the arrow keys or the mouse,
+then press `Space` or `Enter`. Your apps, Flatpak apps and Omarchy's launcher
+and dock all switch to it. Type `/` to search when the list gets long.
 
-Iconic adds a small icon layer at `~/.icons/iconic-apps` that the launcher
-reads first: one SVG per launcher, taken from the chosen theme (PNG icons are
-wrapped in SVG so they win), or the app's own icon when the theme has none.
-The layer is rebuilt whenever the icon theme or a launcher changes, and the
-launcher picks it up the next time its menu or app grid opens.
+Omarchy themes come with an icon theme of their own. By default, your pick
+stays until you switch to another Omarchy theme, which then brings its own.
+Tick **Keep my choice** (or press `L`) and your icon theme stays put, whatever
+Omarchy theme you switch to. Either way it survives `omarchy update`.
+
+## Install new themes
+
+Downloaded a theme from [GNOME Look](https://www.gnome-look.org/browse?cat=132)
+or GitHub? Drop the archive (`.zip`, `.tar.gz`, `.tar.xz`, `.tar.zst`, `.7z`)
+or the unpacked folder onto the window, or open **Install** and choose the
+files. Iconic finds the themes inside and installs them for you only, where
+Flatpak apps can see them too.
+
+![Installing a theme](docs/install.png)
+
+Themes you installed are listed on the same page, with a button to apply or
+remove each one.
+
+## Change how apps look in the launcher
+
+Open **Apps** and pick an app from the list. On the right you can:
+
+- **Rename it**: type a new name.
+- **Give it another icon**: drop a PNG or SVG straight onto the icon, choose
+  one from your current theme, or pick a file.
+- **Hide it**: tick *Hide from the launcher*.
+
+Press **Save** and the launcher updates. Use the *Modified* and *Hidden*
+filters to find what you've changed, and **Reset** to put an app back the way
+it was. Your changes come back by themselves after `omarchy update`.
+
+![Editing an app](docs/apps.png)
+
+## Why app icons finally follow your theme
+
+Omarchy's launcher and dock don't look app icons up in your icon theme. They
+take the first matching icon they find from any installed theme, so switching
+themes often changed your folders but not your apps.
+
+Iconic fixes that with a small icon layer the launcher reads first, holding
+one icon per app from the theme you picked (or the app's own icon when the
+theme has none). It's rebuilt whenever you change your theme or an app.
 
 ## Install
-
-Iconic is built like Omarchy's own apps: C++ and Qt Quick, one binary,
-installed as an Arch package.
 
 ```sh
 git clone https://github.com/UnderStackDev/omarchy_iconic.git
 cd omarchy_iconic
-bin/install          # builds and installs the package (makepkg -fsi)
+bin/install
 ```
 
-Then open **Iconic** from the app launcher (`Super + Space`).
+This builds Iconic and installs it as a package. Then open **Iconic** from the
+app launcher (`Super + Space`). Everything it needs already comes with
+Omarchy.
 
-The package and command are called `omarchy_iconic`. Before 0.2.0 they were
-called `iconic`, which is also the name of an unrelated GNOME app in the AUR,
-so `omarchy update` replaced this app with that one
-([#2](https://github.com/UnderStackDev/omarchy_iconic/issues/2)). Installing
-0.2.0 removes an old `iconic` 0.x package and its hooks and keeps your
-settings. If the update already put the GNOME app in its place and you don't
-want it, remove it with `sudo pacman -R iconic`.
+Upgrading from a version before 0.2.0? The app used to be called `iconic`,
+which is also the name of an unrelated app in the AUR, so `omarchy update`
+could replace one with the other
+([#2](https://github.com/UnderStackDev/omarchy_iconic/issues/2)). It's now
+called `omarchy_iconic`. Installing it removes the old package and keeps your
+settings. If the other app took its place and you don't want it, remove it
+with `sudo pacman -R iconic`.
 
-Needs `qt6-base`, `qt6-declarative`, `qt6-wayland`, `qt6-svg`,
-`xdg-desktop-portal`, `libarchive` (bsdtar), `gtk-update-icon-cache` and
-`desktop-file-utils`; Omarchy has them all.
-
-## Keys
+## Keyboard shortcuts
 
 | Key | Action |
 |---|---|
 | `1` `2` `3` | Themes, Install, Apps |
 | Arrows | Pick a theme or an app |
-| `Space` / `Enter` | Apply the picked theme |
+| `Space` / `Enter` | Use the picked theme |
 | `/` | Search |
-| `L` | Keep my icon theme across Omarchy theme switches, on or off |
-| `Del` | Remove the picked theme you installed |
-| `O` | Choose theme files to install (Install tab) |
-| `Enter` | Edit the picked app's name (Apps tab) |
-| `I` | Pick an icon from the theme (Apps tab) |
-| `Ctrl+S` | Save the launcher (Apps tab) |
-| `Ctrl+Z` / `Ctrl+Shift+Z` | Undo / redo launcher changes |
+| `L` | Keep my icon theme when the Omarchy theme changes, on or off |
+| `Delete` | Remove the picked theme you installed |
+| `O` | Choose theme files to install |
+| `Enter` | Rename the picked app |
+| `I` | Pick an icon from the theme |
+| `Ctrl+S` | Save the app |
+| `Ctrl+Z` / `Ctrl+Shift+Z` | Undo / redo |
 | `A` | About |
-| `?` | All keys |
+| `?` | All shortcuts |
 | `Q` | Quit |
 
 ## Command line
 
-Everything also works without the window. Every command takes `--json` and
-exits 0 or 1.
+Everything also works from a terminal, for scripts and dotfiles. Add `--json`
+for machine-readable output.
 
 ```sh
 omarchy_iconic status
@@ -91,42 +118,51 @@ omarchy_iconic app reset firefox
 omarchy_iconic shell-icons        # rebuild the launcher icon layer
 ```
 
-## What it changes
+## What Iconic changes on your system
+
+Only files in your home folder; nothing needs administrator rights after
+installing.
 
 | Where | What |
 |---|---|
-| gsettings `org.gnome.desktop.interface icon-theme` | the icon theme (GTK apps, and Flatpak apps through the settings portal) |
-| `~/.config/gtk-3.0/settings.ini`, `gtk-4.0/settings.ini`, `kdeglobals`, `qt5ct`/`qt6ct` (if present) | the same theme name, one key each, everything else kept |
-| `~/.config/omarchy/hooks/theme-set.d/omarchy_iconic` | runs after an Omarchy theme switch or refresh: keeps your theme (Lock, or Follow while the Omarchy theme is the same), or takes the new Omarchy theme's pick and copies it to the files above |
-| `~/.config/omarchy/hooks/post-update.d/omarchy_iconic` | runs after `omarchy update`: puts back launcher changes that the update re-copied, rebuilds changed packages' launchers with your changes, then the theme as above |
-| `~/.config/iconic/config.toml` | Follow or Lock, your theme, and the Omarchy theme it was picked under |
-| `~/.config/iconic/apps.json` | your launcher changes, so they can be put back after updates |
+| GNOME setting `org.gnome.desktop.interface icon-theme` | the icon theme (GTK apps, and Flatpak apps through the settings portal) |
+| `~/.config/gtk-3.0`, `gtk-4.0`, `kdeglobals`, `qt5ct`, `qt6ct` | the same theme name, only if these files already exist |
+| `~/.config/omarchy/hooks/theme-set.d/omarchy_iconic` | after an Omarchy theme switch: keeps your icon theme, or takes the new Omarchy theme's |
+| `~/.config/omarchy/hooks/post-update.d/omarchy_iconic` | after `omarchy update`: puts your app changes and icon theme back |
+| `~/.config/iconic/` | your settings and app changes |
 | `~/.icons/iconic-apps/` | the launcher icon layer |
 | `~/.local/share/icons/` | themes you install |
-| `~/.local/share/applications/` | launcher changes: a copy marked `X-Iconic-Override=true` for system and Flatpak apps; your own launchers are edited in place after a backup in `~/.local/share/iconic/backups/` |
-| `~/.local/share/iconic/icons/` | icon files you picked for launchers |
+| `~/.local/share/applications/` | your app changes, as a personal copy of the app's launcher (marked `X-Iconic-Override=true`) |
+| `~/.local/share/iconic/` | icons you picked from files, and backups |
 
-Archives are listed before they're unpacked (2 GiB / 300,000 files at most),
-unpacked by bsdtar, and only files and links that stay inside the archive are
-installed.
+Theme archives are checked before they're unpacked (2 GiB / 300,000 files at
+most), and only files that stay inside the theme are installed.
 
 ## Uninstall
 
 ```sh
 sudo pacman -R omarchy_iconic
 rm -rf ~/.icons/iconic-apps ~/.config/iconic \
-       ~/.config/omarchy/hooks/theme-set.d/omarchy_iconic ~/.config/omarchy/hooks/post-update.d/omarchy_iconic
+       ~/.config/omarchy/hooks/theme-set.d/omarchy_iconic \
+       ~/.config/omarchy/hooks/post-update.d/omarchy_iconic
 ```
 
-Launcher changes stay until you reset them (or delete the files marked
-`X-Iconic-Override=true` in `~/.local/share/applications`).
+Your app changes stay until you reset them, or delete the files marked
+`X-Iconic-Override=true` in `~/.local/share/applications`.
 
-## Build and test
+## Building from source
+
+Iconic is C++ and Qt Quick, like Omarchy's own apps.
 
 ```sh
 bin/build && build/omarchy_iconic
 bin/test
 ```
+
+## On GNOME?
+
+There's a separate Iconic for GNOME:
+[UnderStackDev/gnome_iconic](https://github.com/UnderStackDev/gnome_iconic).
 
 ## License
 
